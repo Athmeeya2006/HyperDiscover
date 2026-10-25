@@ -82,7 +82,9 @@ def main():
         if k in df.columns:
             df[k] = df[k].fillna("-")
     keys = group_keys(df) + ["method"]
-    df[keys] = df[keys].astype(str)
+    # missing spec fields (e.g. S5-only parameters on other systems) must not drop rows from groupby;
+    # pandas >= 3 keeps NaN through astype(str), so fill first
+    df[keys] = df[keys].astype(object).where(df[keys].notna(), "-").astype(str)
     dup = (
         df.groupby(keys)["spec.seed"].agg(lambda s: s.duplicated().any())
         if "spec.seed" in df
@@ -104,6 +106,9 @@ def main():
         if not cols:
             continue
         tab = aggregate(df, keys, cols)
+        # grouping uses every spec field; display only the ones that vary (plus the main keys)
+        show = [c for c in keys if c in KEYS or c == "method" or tab[c].nunique() > 1]
+        tab = tab[show + [c for c in tab.columns if c not in keys]]
         to_markdown(tab, out / "tables" / f"{name}.md")
         to_latex(
             tab,
