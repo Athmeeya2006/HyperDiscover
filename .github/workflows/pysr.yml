@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: "3.10"
           cache: pip
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: .julia_depot
           key: julia-depot-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
