@@ -1,0 +1,6 @@
+# S4 higher-order SIS (quenched mean field). dx_i = −μ x_i + β (1−x_i) Σ x_j + β_Δ (1−x_i) Σ x_j x_k
+system_id: S4
+params: {mu: 1.0, beta: 0.4, beta_tri: 1.2}
+param_ranges: {beta: [0.05, 0.8], beta_tri: [0.0, 3.0]}  # β sweep for threshold / hysteresis tests
+dt: 0.05
+ic_box: [0.0, 1.0]

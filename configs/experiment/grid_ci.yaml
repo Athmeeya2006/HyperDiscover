@@ -1,0 +1,8 @@
+# Two tiny instances so CI can exercise make_benchmark.py + run_baselines.py.
+systems: [S4, S2]
+hyper_kinds: [open]
+N: [8]
+noise: [0.0]
+seeds: [0]
+M: 6
+T: 40

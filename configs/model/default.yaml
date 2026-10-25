@@ -1,0 +1,5 @@
+model:
+  hidden: 64
+  layers: 3
+  init_prob_pair: 0.9
+  init_prob_tri: 0.5

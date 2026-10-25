@@ -1,0 +1,5 @@
+# Weak-form data term (recommended at noise ≥ 5%).
+train:
+  pairwise: {loss: weak}
+  triadic: {loss: weak}
+  joint: {loss: weak}

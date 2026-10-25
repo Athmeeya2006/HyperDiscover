@@ -1,0 +1,6 @@
+screen:
+  all_pairs_max_n: 200     # N ≤ this: every ordered pair is a candidate
+  k_p: 30                  # top-K pairwise sources per node otherwise
+  all_triples_max_n: 12    # N ≤ this: every (i, {j,k}) is a candidate (N=20 all-triples: 2.3 s/step on CPU, see RESEARCH_LOG)
+  k_t: 50                  # top-K triples per node otherwise
+  n_neighbours: 15         # triples drawn from pairs of i's top neighbours

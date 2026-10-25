@@ -1,0 +1,37 @@
+# Conda environment for the Ada cluster (Ubuntu 18.04, glibc 2.27, sm_61/sm_75).
+# Torch is pinned to 2.4.1 because newer wheels may need glibc >= 2.28 and drop sm_61.
+# cu118 by default (older drivers); switch to cu121 only if `nvidia-smi` reports a driver >= 525.
+name: hyperdiscover
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      # cu118: works with older drivers (Ada shows a CUDA 11.6 module); check `nvidia-smi` in Phase 0
+      - --extra-index-url https://download.pytorch.org/whl/cu118
+      - torch==2.4.1
+      - torchdiffeq==0.2.4
+      - "numpy<2"
+      - scipy
+      - networkx
+      - xgi
+      - h5py
+      - pandas
+      - scikit-learn
+      - sympy
+      - matplotlib
+      - seaborn
+      - omegaconf
+      - pyyaml
+      - tqdm
+      - pysindy
+      - pysr==2.7.2          # tested locally (Python 3.12); confirm on Ada in Phase 0
+      - juliacall==0.9.36
+      - tabulate
+      - tensorboard
+      - pytest
+      - pytest-timeout
+      - ruff
+      - gradio
+      - -e .

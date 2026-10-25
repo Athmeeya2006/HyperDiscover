@@ -1,0 +1,11 @@
+# The S4 sanity instance as a one-instance grid (for run_many / Kaggle).
+systems: [S4]
+hyper_kinds: [open]
+N: [10]
+noise: [0.0]
+seeds: [0]
+graph: er
+mean_degree: 3.0
+hyper_density: 0.2   # -> 2 hyperedges at N = 10
+M: 50
+T: 200

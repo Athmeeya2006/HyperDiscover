@@ -1,0 +1,32 @@
+name: Sanity gate (S4, N=10)
+
+# The Phase-4 acceptance gate (CLAUDE.md §12 test 6). Manual only: it takes ~10+ minutes and
+# is expected to fail until the method is tuned; results go into RESEARCH_LOG.md.
+on:
+  workflow_dispatch:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      JULIA_DEPOT_PATH: ${{ github.workspace }}/.julia_depot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      - name: Install
+        run: |
+          pip install "torch==2.4.1" --index-url https://download.pytorch.org/whl/cpu
+          pip install "numpy<2" -e ".[dev,sr,baselines]"
+          python -c "import juliacall; import pysr"
+      - run: pytest -m slow tests/test_pipeline_small.py -v -s
+      - run: python scripts/run_pipeline.py --experiment configs/experiment/sanity_s4.yaml --out gate_run --visualize
+        if: always()
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gate-run
+          path: gate_run/

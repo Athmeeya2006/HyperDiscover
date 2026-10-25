@@ -1,0 +1,13 @@
+# Reduced benchmark grid (CLAUDE.md §3.5): 5 systems × 3 hyperedge types × N ∈ {20,100,500}
+# × noise ∈ {0, 1%, 5%, 10%}, 1 seed  (= 180 instances), plus pairwise-only variants.
+systems: [S1, S2, S3, S4, S5]
+hyper_kinds: [open, closed, mixed]
+N: [20, 100, 500]
+noise: [0.0, 0.01, 0.05, 0.10]
+seeds: [0]
+pairwise_only_variants: true
+graph: er
+mean_degree: 4.0
+hyper_density: 0.3
+M: 50
+T: 200

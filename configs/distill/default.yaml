@@ -1,0 +1,15 @@
+distill:
+  engine: auto             # pysr | library | auto (pysr if importable)
+  n_samples: 4000
+  pysr:
+    binary_operators: ["+", "-", "*", "/"]
+    unary_operators: [sin, cos, exp, square, cube]
+    maxsize: 20
+    niterations: 200
+    timeout_in_seconds: 600   # CLAUDE.md §3.5: start at 10 minutes, 3 restarts
+    parsimony: 1.0e-3
+    populations: 30
+    restarts: 3
+select:
+  shortlist_k: 3
+  drop_one: true

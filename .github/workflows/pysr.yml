@@ -1,0 +1,40 @@
+name: PySR
+
+# Julia + SymbolicRegression.jl install is slow (~5–10 min), so this runs weekly, on demand,
+# and when the distillation code changes.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+  push:
+    branches: [main]
+    paths: ["src/hyperdiscover/distill/**", "tests/test_distill.py", ".github/workflows/pysr.yml"]
+
+env:
+  JULIA_DEPOT_PATH: ${{ github.workspace }}/.julia_depot
+  MPLBACKEND: Agg
+
+jobs:
+  pysr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      - uses: actions/cache@v4
+        with:
+          path: .julia_depot
+          key: julia-depot-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+      - name: Install
+        run: |
+          pip install "torch==2.4.1" --index-url https://download.pytorch.org/whl/cpu
+          pip install "numpy<2" -e ".[dev,sr]"
+      - name: Install Julia backend (first import)
+        run: python -c "import juliacall; import pysr; print(pysr.__version__)"
+      - name: Offline-style PySR check (sin x)
+        run: python scripts/check_env.py --cpu-only --pysr
+      - name: Distillation tests
+        run: pytest -m pysr tests/test_distill.py -v

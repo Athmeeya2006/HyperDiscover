@@ -1,0 +1,4 @@
+# Alternative schedule for the Phase 4 pilot: all gates from the start (not the spec default).
+schedule: [joint]
+train:
+  joint: {steps: 6000, lr_net: 3.0e-3, lr_gate: 5.0e-2, beta_start: 0.667, beta_end: 0.3}

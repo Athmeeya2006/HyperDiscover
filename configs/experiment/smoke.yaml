@@ -1,0 +1,9 @@
+# Seconds-long end-to-end run for CI (checks wiring, not accuracy).
+benchmark: {system_id: S4, N: 6, noise: 0.0, hyper_kind: open, n_hyper: 1, graph: er, mean_degree: 2.0, M: 8, T: 60, seed: 0}
+config:
+  model: {hidden: 16, layers: 2}
+  train:
+    pairwise: {steps: 40, log_every: 1000}
+    triadic: {steps: 40, log_every: 1000}
+    joint: {steps: 20, log_every: 1000}
+distill_engine: library

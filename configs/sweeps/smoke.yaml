@@ -1,0 +1,3 @@
+base: {}
+warmup:
+  train: {pairwise: {warmup_steps: 10}}

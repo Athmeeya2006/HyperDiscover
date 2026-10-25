@@ -1,0 +1,23 @@
+# Ada cluster paths and SLURM settings. FILL IN WITH THE HUMAN IN PHASE 0. DO NOT GUESS.
+# Every value marked TODO must be confirmed before any job is submitted.
+slurm:
+  account: TODO            # e.g. the research group's SLURM account
+  partition: TODO          # GPU partition name
+  cpu_partition: TODO      # partition for CPU-only (PySR) jobs; may equal `partition`
+  gpu_type: TODO           # "1080ti" / "2080ti" / gres string used by `--gres=gpu:<type>:1`
+  qos: null
+  max_time_gpu: "06:00:00" # prefer short, resumable jobs (CLAUDE.md §3.5)
+  max_time_cpu: "12:00:00"
+paths:
+  repo: TODO               # path of this repo on Ada
+  conda_env: hyperdiscover
+  conda_sh: TODO           # e.g. ~/miniconda3/etc/profile.d/conda.sh
+  shared_storage: TODO     # where datasets/runs live (not $HOME if quota is small)
+  scratch: /scratch/$USER  # node-local scratch (verify the real mount point)
+  julia_depot: TODO        # JULIA_DEPOT_PATH on shared storage, pre-populated on the login node
+  runs: TODO               # output root for runs
+  benchmarks: TODO         # output root for benchmark files
+  gpu_claims: TODO         # path of the shared GPU_CLAIMS.md (outside both repos)
+budget:
+  total_gpus: 4            # shared with TipNet-H (CLAUDE.md §3.5)
+  gpu_hours_target: 800

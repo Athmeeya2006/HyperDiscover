@@ -1,0 +1,6 @@
+# The Phase-4 end-to-end sanity gate (test_pipeline_small): S4, N=10, two open hyperedges,
+# zero noise, 50 trajectories, CPU.
+benchmark: {system_id: S4, N: 10, noise: 0.0, hyper_kind: open, n_hyper: 2, graph: er, mean_degree: 3.0,
+            M: 50, T: 200, seed: 0}
+config: {}
+distill_engine: auto

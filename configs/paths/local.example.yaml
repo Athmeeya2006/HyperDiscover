@@ -1,0 +1,5 @@
+# Copy to configs/paths/local.yaml (git-ignored) for laptop / workstation runs.
+paths:
+  runs: runs
+  benchmarks: benchmarks_out
+  julia_depot: ~/.julia_hyperdiscover

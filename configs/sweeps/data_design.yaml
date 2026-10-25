@@ -1,0 +1,41 @@
+# Phase-4 pilot, round 3: does better-designed DATA rescue the neural gating? (S4 sanity structure)
+# Motivation: identifiability analysis (sparse ICs / short trajectories / kicks raise the pure-interaction
+# fraction up to ~7x) and the data audit (71% of default S4 samples sit at one shared fixed point).
+# Same graph and hyperedges as configs/experiment/sanity_s4.yaml (structure is drawn before simulation).
+# Baselines with default data (M=50, T=200): runs/kaggle/alt-sweep (hard_concrete_lam5x, alt_default, alt_no_pair_stage).
+short_hc_lam5x:
+  benchmark: {M: 400, T: 25}
+  train: {pairwise: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_pair: 0.05},
+          triadic: {warmup_steps: 500, beta_start: 0.3, beta_end: 0.1, lam_tri: 0.1},
+          joint: {beta_start: 0.2, beta_end: 0.05, lam_pair: 0.05, lam_tri: 0.1}}
+short_alt:
+  benchmark: {M: 400, T: 25}
+  gating: alternating
+short_alt_no_pair_stage:
+  benchmark: {M: 400, T: 25}
+  gating: alternating
+  train: {alternating: {pair_only_rounds: 0}}
+kicks_hc_lam5x:
+  benchmark: {kick_std: 0.5, kick_every: 10}
+  train: {pairwise: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_pair: 0.05},
+          triadic: {warmup_steps: 500, beta_start: 0.3, beta_end: 0.1, lam_tri: 0.1},
+          joint: {beta_start: 0.2, beta_end: 0.05, lam_pair: 0.05, lam_tri: 0.1}}
+kicks_alt:
+  benchmark: {kick_std: 0.5, kick_every: 10}
+  gating: alternating
+kicks_alt_no_pair_stage:
+  benchmark: {kick_std: 0.5, kick_every: 10}
+  gating: alternating
+  train: {alternating: {pair_only_rounds: 0}}
+short_kicks_hc_lam5x:
+  benchmark: {M: 200, T: 50, kick_std: 0.5, kick_every: 10}
+  train: {pairwise: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_pair: 0.05},
+          triadic: {warmup_steps: 500, beta_start: 0.3, beta_end: 0.1, lam_tri: 0.1},
+          joint: {beta_start: 0.2, beta_end: 0.05, lam_pair: 0.05, lam_tri: 0.1}}
+short_kicks_alt:
+  benchmark: {M: 200, T: 50, kick_std: 0.5, kick_every: 10}
+  gating: alternating
+short_kicks_alt_no_pair_stage:
+  benchmark: {M: 200, T: 50, kick_std: 0.5, kick_every: 10}
+  gating: alternating
+  train: {alternating: {pair_only_rounds: 0}}

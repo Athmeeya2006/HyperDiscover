@@ -1,0 +1,7 @@
+# S1 higher-order Kuramoto (unwrapped phases). dθ_i = ω_i + K1 Σ sin(θj−θi) + K2 Σ sin(θj+θk−2θi)
+system_id: S1
+params: {K1: 0.5, K2: 0.5, omega_scale: 1.0}   # ω_i ~ U(−1, 1) · omega_scale (node constants c_i)
+param_ranges: {K1: [0.1, 1.5], K2: [0.1, 1.5]} # explored in sweeps; synchronisation onset in this range (to verify per graph)
+dt: 0.05
+ic_box: [0.0, 6.283185307]
+periodic: true

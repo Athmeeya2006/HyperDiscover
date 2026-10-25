@@ -1,0 +1,13 @@
+# NRI (GNN baseline, CLAUDE.md §8.4) on the N=20 part of the reduced grid, noise {0, 1%}:
+# 5 systems × {open, closed, mixed} + pairwise-only variants = 40 instances (same data as the tuned baseline table).
+systems: [S1, S2, S3, S4, S5]
+hyper_kinds: [open, closed, mixed]
+N: [20]
+noise: [0.0, 0.01]
+seeds: [0]
+pairwise_only_variants: true
+graph: er
+mean_degree: 4.0
+hyper_density: 0.3
+M: 50
+T: 200

@@ -1,0 +1,6 @@
+# CPU-sized smoke settings (tests, demo). Not for paper numbers.
+model: {hidden: 32, layers: 2}
+train:
+  pairwise: {steps: 800}
+  triadic: {steps: 800}
+  joint: {steps: 400}

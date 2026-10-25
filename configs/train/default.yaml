@@ -1,0 +1,8 @@
+# Identifiability schedule (a): pairwise -> triadic -> joint. λ_t > λ_p (Occam prior).
+train:
+  pairwise: {steps: 3000, batch: 128, loss: derivative, lam_pair: 0.01, lr_net: 3.0e-3, lr_gate: 5.0e-2}
+  triadic:  {steps: 3000, batch: 128, loss: derivative, lam_tri: 0.02, lr_net: 3.0e-3, lr_gate: 5.0e-2, anova: 0.0}
+  joint:    {steps: 1500, batch: 128, loss: derivative, lam_pair: 0.01, lam_tri: 0.02, lr_net: 1.0e-3,
+             lr_gate: 2.0e-2, anova: 0.0, rollout_weight: 0.0, rollout_horizon: 5, beta_start: 0.667, beta_end: 0.2}
+  prune_between_stages: true
+  prune_threshold: 0.05

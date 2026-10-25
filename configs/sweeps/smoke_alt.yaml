@@ -1,0 +1,3 @@
+alt_tiny:
+  gating: alternating
+  train: {alternating: {rounds: 3, steps_per_round: 20, first_round_steps: 30, pair_only_rounds: 1, lasso_samples: 400}}

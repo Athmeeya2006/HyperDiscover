@@ -1,0 +1,6 @@
+# S3 nonlinear higher-order consensus. dx_i = k1 Σ (xj − xi) + k2 Σ exp(−λ|xj − xk|)((xj + xk)/2 − xi)
+system_id: S3
+params: {k1: 0.2, k2: 0.4, lam: 1.0}
+param_ranges: {k1: [0.05, 0.5], k2: [0.1, 1.0], lam: [0.5, 2.0]}
+dt: 0.05
+ic_box: [-2.0, 2.0]

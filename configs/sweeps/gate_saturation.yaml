@@ -1,0 +1,27 @@
+# Phase-3/4 pilot: make hard-concrete gates saturate (RESEARCH_LOG 2026-10-24 diagnosis).
+# Each entry overrides the experiment config. Compare against `base` (the current defaults).
+base: {}
+warmup:
+  train: {pairwise: {warmup_steps: 1000}, triadic: {warmup_steps: 500}}
+lowtemp:
+  train: {pairwise: {beta_start: 0.3, beta_end: 0.1}, triadic: {beta_start: 0.3, beta_end: 0.1},
+          joint: {beta_start: 0.2, beta_end: 0.05}}
+warmup_lowtemp:
+  train: {pairwise: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1},
+          triadic: {warmup_steps: 500, beta_start: 0.3, beta_end: 0.1},
+          joint: {beta_start: 0.2, beta_end: 0.05}}
+warmup_lowtemp_lam5x:
+  train: {pairwise: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_pair: 0.05},
+          triadic: {warmup_steps: 500, beta_start: 0.3, beta_end: 0.1, lam_tri: 0.1},
+          joint: {beta_start: 0.2, beta_end: 0.05, lam_pair: 0.05, lam_tri: 0.1}}
+warmup_lowtemp_fastgates:
+  train: {pairwise: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lr_gate: 0.2},
+          triadic: {warmup_steps: 500, beta_start: 0.3, beta_end: 0.1, lr_gate: 0.2},
+          joint: {beta_start: 0.2, beta_end: 0.05, lr_gate: 0.1}}
+joint_only_warmup_lowtemp:
+  schedule: [joint]
+  train: {joint: {steps: 6000, warmup_steps: 1500, beta_start: 0.3, beta_end: 0.05, lr_net: 3.0e-3, lr_gate: 5.0e-2}}
+warmup_lowtemp_weak:
+  train: {pairwise: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, loss: weak},
+          triadic: {warmup_steps: 500, beta_start: 0.3, beta_end: 0.1, loss: weak},
+          joint: {beta_start: 0.2, beta_end: 0.05, loss: weak}}

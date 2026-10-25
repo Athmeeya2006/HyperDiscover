@@ -1,0 +1,6 @@
+# S2 higher-order competitive Lotka–Volterra. dx_i = x_i (r − x_i) + a Σ x_i x_j + b Σ x_i x_j x_k
+system_id: S2
+params: {r: 1.0, a: -0.15, b: -0.3}
+param_ranges: {a: [-0.3, -0.05], b: [-0.6, -0.1]}  # competitive (a, b < 0) keeps x ≥ 0 bounded
+dt: 0.05
+ic_box: [0.05, 1.5]

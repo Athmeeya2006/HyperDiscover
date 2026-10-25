@@ -1,0 +1,13 @@
+# Observation protocol (CLAUDE.md §6.2)
+M: 50              # trajectories
+T: 200             # saved points per trajectory
+dt: null           # null -> system default
+noise_levels: [0.0, 0.01, 0.05, 0.10]
+kick_std: 0.0
+kick_every: 0
+split: [0.7, 0.15, 0.15]   # whole trajectories
+derivatives:
+  method: savgol           # fd | savgol | tikhonov | tv
+  savgol: {window: 9, polyorder: 3}
+  tikhonov: {alpha: 1.0e-3}
+weak_form: {window: 21, stride: 4, power: 4}

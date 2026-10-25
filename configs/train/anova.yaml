@@ -1,0 +1,4 @@
+# Identifiability option (b): functional-ANOVA pure-interaction penalty on h.
+train:
+  triadic: {anova: 0.1}
+  joint: {anova: 0.1}

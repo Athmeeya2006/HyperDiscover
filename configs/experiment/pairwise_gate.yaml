@@ -1,0 +1,8 @@
+# Phase-3 gate: pairwise-only S1–S5 at N=50, noise 1%; edge AUROC ≥ 0.95.
+systems: [S1, S2, S3, S4, S5]
+hyper_kinds: [open]
+N: [50]
+noise: [0.01]
+seeds: [0]
+pairwise_only: true
+max_order: 2

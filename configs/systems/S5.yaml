@@ -1,0 +1,6 @@
+# S5 mutualistic + triadic (SYNTHETIC VARIANT designed for this benchmark).
+system_id: S5
+params: {B: 0.1, K: 5.0, C: 1.0, D: 5.0, E: 0.9, H: 0.1, gamma: 1.0}
+param_ranges: {gamma: [0.0, 2.0]}
+dt: 0.05
+ic_box: [0.0, 5.0]
