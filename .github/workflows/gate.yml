@@ -25,7 +25,7 @@ jobs:
       - run: pytest -m slow tests/test_pipeline_small.py -v -s
       - run: python scripts/run_pipeline.py --experiment configs/experiment/sanity_s4.yaml --out gate_run --visualize
         if: always()
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: gate-run
