@@ -140,3 +140,16 @@ def _segment_starts(n_steps: int, burn_in: int, kick_every: int) -> list[int]:
         return [0]
     jumps = {s - burn_in for s in range(kick_every, n_steps + burn_in, kick_every) if s > burn_in}
     return sorted({0} | jumps)
+
+
+def sparse_ic(system, n: int, rng: np.random.Generator, p_low: float = 0.7) -> np.ndarray:
+    """Sparse initial conditions [n, N, d]: each node starts near the low end of the IC box with
+    probability ``p_low``, otherwise uniform in the box.
+
+    Decorrelates neighbouring states (joint (x_j, x_k) configurations get visited) and keeps nodes
+    away from saturation, where triadic terms such as (1 − x_i) x_j x_k are weak.
+    """
+    lo, hi = system.ic_box
+    x0 = system.sample_ic(n, rng)
+    low = rng.random(x0.shape) < p_low
+    return np.where(low, lo + 0.05 * (hi - lo) * rng.random(x0.shape), x0)

@@ -1,0 +1,18 @@
+# Round 4b (S4 sanity): GNN-encoder gates after the saturation fix (fixed prior offset, no head bias, network LR),
+# on the data design that made hard-concrete edges exact (sparse ICs + M=400/T=25) and on default data.
+gnn_sparse_short:
+  benchmark: {M: 400, T: 25, ic_mode: sparse}
+  gating: gnn_encoder
+gnn_sparse_short_lam5x:
+  benchmark: {M: 400, T: 25, ic_mode: sparse}
+  gating: gnn_encoder
+  train: {pairwise: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_pair: 0.05},
+          triadic: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_tri: 0.004},
+          joint: {beta_start: 0.2, beta_end: 0.05, lam_pair: 0.002, lam_tri: 0.004}}
+gnn_default:
+  gating: gnn_encoder
+hc_sparse_short_ref:
+  benchmark: {M: 400, T: 25, ic_mode: sparse}
+  train: {pairwise: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_pair: 0.05},
+          triadic: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_tri: 0.004},
+          joint: {beta_start: 0.2, beta_end: 0.05, lam_pair: 0.002, lam_tri: 0.004}}

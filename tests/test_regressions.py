@@ -43,9 +43,14 @@ def test_two_point_segment_derivative():
     assert np.allclose(out[0, 50:, 0, 0], (X[0, 51, 0, 0] - X[0, 50, 0, 0]) / 0.1)
 
 
-def test_weak_form_without_windows_raises_clearly():
-    with pytest.raises(ValueError, match="weak_kw.window"):
-        make_weak_form(np.arange(40) * 0.1, window=21, segment_starts=[0, 20])
+def test_weak_form_window_shrinks_to_short_segments():
+    # kick segments shorter than the requested window: the window shrinks to fit (it used to raise,
+    # which crashed every kicked run on Kaggle, RESEARCH_LOG 2026-10-26)
+    wf = make_weak_form(np.arange(40) * 0.1, window=21, segment_starts=[0, 20])
+    assert wf.length == 20 and len(wf.starts) >= 2
+    assert all(s + wf.length <= 20 or s >= 20 for s in wf.starts)  # never straddles the kick
+    with pytest.raises(ValueError, match="too short"):
+        make_weak_form(np.arange(8) * 0.1, window=21, segment_starts=[0, 4])
 
 
 def test_mixed_hyperedges_keep_their_class():

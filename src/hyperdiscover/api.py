@@ -90,7 +90,13 @@ class HyperDiscover:
         segment_starts=None,
         val_fraction: float = 0.2,
         out_dir: str | Path | None = None,
+        known_structure: Structure | None = None,
+        candidates: Structure | None = None,
+        fixed_hyperedges: bool = False,
     ) -> HyperDiscover:
+        """``known_structure``: skip structure inference and learn only f, g, h (and c) on it, e.g. a
+        structure found by joint-kick interventions (hyperdiscover.intervene).
+        ``candidates``: use these edges/hyperedges instead of Stage-1 screening; selection still runs."""
         X = np.asarray(X, dtype=np.float64)
         if X.ndim == 3:
             X = X[..., None]
@@ -108,7 +114,17 @@ class HyperDiscover:
         va = va if len(va) else tr
         self.train_idx_, self.val_idx_ = tr, va
         ckpt = Path(out_dir) / "checkpoints" if out_dir else None
-        res: StructureResult = fit_structure(X[tr], t, self.config, segment_starts, ckpt, self._log)
+        res: StructureResult = fit_structure(
+            X[tr],
+            t,
+            self.config,
+            segment_starts,
+            ckpt,
+            self._log,
+            known_structure=known_structure,
+            candidates=candidates,
+            fixed_hyperedges=fixed_hyperedges,
+        )
         self.structure_result_ = res
         self._readout(X.shape[2])
         if self.distill_engine != "none":
@@ -150,6 +166,7 @@ class HyperDiscover:
                 "seed": self.seed,
                 "use_c": bool(res.model.use_c),
                 "use_tris": bool(res.model.use_tris),
+                "weight_mode": bool(res.model.weight_mode),
                 "shape": res.model.N,
             },
             path,
@@ -169,6 +186,7 @@ class HyperDiscover:
         import torch
 
         from .data.dataset import TrainData
+        from .model.gnn_gates import node_features
         from .model.structure_model import StructureModel
         from .train.checkpoint import load_model_state
 
@@ -198,6 +216,12 @@ class HyperDiscover:
             dc["trim"],
         )
         mc = cfg["model"]
+        feats = None
+        if (
+            cfg.get("gating", "hard_concrete") == "gnn_encoder"
+        ):  # values restored from the state dict
+            gc = mc.get("gnn", {})
+            feats = node_features(data.S, data.Y, gc.get("snapshots", 64), ck["periodic"])
         model = StructureModel(
             X.shape[2],
             1,
@@ -208,9 +232,16 @@ class HyperDiscover:
             ck["use_c"],
             ck["periodic"],
             data.norm,
+            node_feats=feats,
+            gnn_hidden=mc.get("gnn", {}).get("hidden", 32),
         )
         load_model_state(model, ck["model_state"])
         model.use_tris = ck["use_tris"]
+        # alternating gating predicts with the learned edge weights, not the (untrained) hard-concrete
+        # gates; a plain attribute, so older checkpoints lack it -> infer from the fit-time config
+        model.weight_mode = bool(
+            ck.get("weight_mode", cfg.get("gating", "hard_concrete") == "alternating")
+        )
         model.eval()
         hd.structure_result_ = StructureResult(
             model,
@@ -267,6 +298,21 @@ class HyperDiscover:
         trim = dcfg["trim"]
         # refit on the same segment-aware mask as training (drops points next to every kick);
         # validate on the trimmed first continuous segment so rollouts never cross a kick
+        # refit loss: "derivative" | "weak" | "auto" (weak when any training stage used the weak loss)
+        refit_loss = dist_cfg.get("refit_loss", "auto")
+        if refit_loss == "auto":
+            losses = [
+                v.get("loss") for v in self.config.get("train", {}).values() if isinstance(v, dict)
+            ]
+            refit_loss = "weak" if "weak" in losses else "derivative"
+        weak_kw = {}
+        if refit_loss == "weak":
+            from .data.weak_form import make_weak_form
+
+            weak_kw = {
+                "weak": make_weak_form(t, segment_starts=segment_starts, **dcfg["weak_kw"]),
+                "X_weak": X[tr],
+            }
         mask = res.data.time_mask
         starts = list(segment_starts or [0]) + [X.shape[1]]
         sl = slice(trim, starts[1] - trim)
@@ -283,8 +329,11 @@ class HyperDiscover:
             self.periodic,
             k=sel_cfg.get("shortlist_k", 3),
             try_drop_one=sel_cfg.get("drop_one", True),
+            drop_tol=sel_cfg.get("drop_tol", 0.02),
+            r2_tol=sel_cfg.get("r2_tol", 1e-5),
             rng=rng,
             logger=self._log,
+            **weak_kw,
         )
         best = self.selection_.best
         self.equations_ = dict(best.exprs)

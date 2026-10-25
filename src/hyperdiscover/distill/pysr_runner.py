@@ -3,11 +3,13 @@
 Primary engine: PySR (Cranmer 2023). Julia must be installed beforehand (on Ada: on the login
 node, into ``JULIA_DEPOT_PATH`` on shared storage; compute nodes are offline).
 
-Fallback engine ``library``: exhaustive sparse regression over a fixed grammar of candidate
+Fallback engine ``library``: beam-search sparse regression over a fixed grammar of candidate
 terms (monomials ≤ degree 3, sin/cos of small integer combinations of the inputs, and
 products with x_i). It is NOT symbolic regression in the PySR sense (it cannot discover
 rational or nested forms) and exists only so the pipeline and CI run without Julia. Results
 from it are labelled ``engine="library"`` everywhere.
+
+References (references/references.bib): cranmer2023interpretable, bertsimas2016best, brunton2016discovering, lacava2021contemporary.
 """
 
 from __future__ import annotations
@@ -208,8 +210,9 @@ def run_library(
     X_val=None,
     y_val=None,
     lam: float = 1e-3,
+    beam: int = 25,
 ) -> DistillResult:
-    """Greedy forward selection over a fixed term grammar (see module docstring)."""
+    """Beam-search sparse regression over a fixed term grammar (see module docstring)."""
     n_inputs = X.shape[1]
     terms = [sp.Integer(1)] + _library_terms(n_inputs)
     vars_ = [XI, XJ, XK][:n_inputs]
@@ -224,36 +227,48 @@ def run_library(
     X_val = X if X_val is None else X_val
     y_val = y if y_val is None else y_val
     res = DistillResult(kind)
-    active: list[int] = []
+    # beam search over supports: keep the `beam` lowest-error supports of each size and offer ALL of them
+    # as candidates; the Pareto front then trades complexity against validation error. Pure greedy
+    # selection (beam = 1) only ever followed the single best path, e.g. sin(x_j) before x_j, so the
+    # simpler exact form 0.4·(x_j − x_i x_j) was never scored (2026-10-26).
+    beams: list[tuple[int, ...]] = [()]
+    seen_exprs: set[str] = set()
     for _ in range(max_terms):
-        best = None
-        for c in range(len(terms)):
-            if c in active:
-                continue
-            A = Theta[:, active + [c]]
-            w, *_ = np.linalg.lstsq(A, yv, rcond=None)
-            err = np.mean((A @ w - yv) ** 2)
-            if best is None or err < best[0]:
-                best = (err, c, w)
-        if best is None:
+        scored: dict[tuple[int, ...], tuple[float, np.ndarray]] = {}
+        for sup in beams:
+            for c in range(len(terms)):
+                if c in sup:
+                    continue
+                key = tuple(sorted(sup + (c,)))
+                if key in scored:
+                    continue
+                A = Theta[:, list(key)]
+                w, *_ = np.linalg.lstsq(A, yv, rcond=None)
+                scored[key] = (float(np.mean((A @ w - yv) ** 2)), w)
+        if not scored:
             break
-        active.append(best[1])
-        w = best[2]
-        expr = sum(
-            sp.Float(float(wi)) * terms[c]
-            for wi, c in zip(w, active)
-            if abs(wi) > lam * (np.abs(w).max() + 1e-30)
-        )
-        expr = clean(sp.sympify(expr), kind)
-        res.candidates.append(
-            Candidate(
-                expr,
-                complexity(expr),
-                _mse(expr, X, yv, n_inputs),
-                _mse(expr, X_val, y_val.ravel(), n_inputs),
-                "library",
+        ranked = sorted(scored.items(), key=lambda kv: kv[1][0])[:beam]
+        beams = [k for k, _ in ranked]
+        for key, (_, w) in ranked:
+            expr = sum(
+                sp.Float(float(wi)) * terms[c]
+                for wi, c in zip(w, key)
+                if abs(wi) > lam * (np.abs(w).max() + 1e-30)
             )
-        )
+            expr = clean(sp.sympify(expr), kind)
+            sig = sp.srepr(expr)
+            if sig in seen_exprs:
+                continue
+            seen_exprs.add(sig)
+            res.candidates.append(
+                Candidate(
+                    expr,
+                    complexity(expr),
+                    _mse(expr, X, yv, n_inputs),
+                    _mse(expr, X_val, y_val.ravel(), n_inputs),
+                    "library",
+                )
+            )
     return res
 
 
@@ -278,9 +293,16 @@ def distill(
                 kind, [Candidate(sp.Float(float(np.mean(y))), 1, 0.0, 0.0, "constant")]
             )
             continue
-        perm = rng.permutation(len(X))
-        nv = int(val_frac * len(X))
-        va, tr = perm[:nv], perm[nv:]
+        groups = s.get("groups")
+        if groups is not None and len(np.unique(groups)) >= 4:
+            # hold out whole TRAJECTORIES: samples of one trajectory are near-duplicates (audit E14)
+            ug = rng.permutation(np.unique(groups))
+            in_va = np.isin(groups, ug[: max(1, int(round(val_frac * len(ug))))])
+            va, tr = np.where(in_va)[0], np.where(~in_va)[0]
+        else:
+            perm = rng.permutation(len(X))
+            nv = int(val_frac * len(X))
+            va, tr = perm[:nv], perm[nv:]
         logger(f"[distill] {kind}: {engine} on {len(tr)} samples, {X.shape[1]} inputs")
         if engine == "pysr":
             out[kind] = run_pysr(X[tr], y[tr], kind, options, seed, out_dir, X[va], y[va])

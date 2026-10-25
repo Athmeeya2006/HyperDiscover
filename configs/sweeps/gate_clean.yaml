@@ -1,0 +1,11 @@
+# Clean single runs of the S4 sanity recipe at the CURRENT code (fit + distill in one run) for the record:
+# alternating gating (SINDy warm start + relaxed readout) + sparse ICs; M=400/T=25 and the gate's M=50 variants.
+clean_M400_T25:
+  benchmark: {M: 400, T: 25, ic_mode: sparse}
+  gating: alternating
+clean_M50_T200:
+  benchmark: {M: 50, T: 200, ic_mode: sparse}
+  gating: alternating
+clean_M50_T50:
+  benchmark: {M: 50, T: 50, ic_mode: sparse}
+  gating: alternating

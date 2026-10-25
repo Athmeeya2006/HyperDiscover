@@ -32,10 +32,19 @@ def sample_messages(
     s_idx = rng.integers(0, len(states), n_samples)
     n_idx = rng.integers(0, N, n_samples)
     xi = torch.as_tensor(states[s_idx, n_idx], dtype=torch.float32, device=dev)
-    out["f"] = {"X": xi.cpu().numpy(), "y": model.msg.f(xi).cpu().numpy()}
+    groups = s_idx // T  # trajectory of every sample: validation splits group by trajectory
+    out["f"] = {"X": xi.cpu().numpy(), "y": model.msg.f(xi).cpu().numpy(), "groups": groups}
 
     pp, pt = model.gate_probs()
-    zp = model.pair_gate("deterministic").cpu().numpy()
+
+    def scale(kind: str) -> np.ndarray:
+        # weight mode (alternating gating): the learned edge weights, NOT the unused hard-concrete gates
+        if model.weight_mode:
+            return model._weights(kind, "deterministic").detach().cpu().numpy()
+        gate = model.pair_gate if kind == "pair" else model.tri_gate
+        return gate("deterministic").detach().cpu().numpy()
+
+    zp = scale("pair")
     act = np.where(pp > threshold)[0]
     if len(act):
         e = act[rng.integers(0, len(act), n_samples)]
@@ -44,9 +53,13 @@ def sample_messages(
         a = torch.as_tensor(xs[np.arange(n_samples), pi[:, 0]], dtype=torch.float32, device=dev)
         b = torch.as_tensor(xs[np.arange(n_samples), pi[:, 1]], dtype=torch.float32, device=dev)
         y = model.msg.g(a, b).cpu().numpy() * zp[e][:, None]
-        out["g"] = {"X": np.concatenate([a.cpu().numpy(), b.cpu().numpy()], -1), "y": y}
+        out["g"] = {
+            "X": np.concatenate([a.cpu().numpy(), b.cpu().numpy()], -1),
+            "y": y,
+            "groups": groups,
+        }
     if model.tri_gate.n and model.use_tris:
-        zt = model.tri_gate("deterministic").cpu().numpy()
+        zt = scale("tri")
         act = np.where(pt > threshold)[0]
         if len(act):
             e = act[rng.integers(0, len(act), n_samples)]
@@ -57,5 +70,9 @@ def sample_messages(
                 torch.as_tensor(xs[r, ti[:, q]], dtype=torch.float32, device=dev) for q in range(3)
             )
             y = model.msg.h(a, b, c).cpu().numpy() * zt[e][:, None]
-            out["h"] = {"X": np.concatenate([v.cpu().numpy() for v in (a, b, c)], -1), "y": y}
+            out["h"] = {
+                "X": np.concatenate([v.cpu().numpy() for v in (a, b, c)], -1),
+                "y": y,
+                "groups": groups,
+            }
     return out

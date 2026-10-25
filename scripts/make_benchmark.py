@@ -45,6 +45,9 @@ def instances(grid: dict) -> list[dict]:
                 "hyper_density": grid.get("hyper_density", 0.3),
                 "M": grid.get("M", 50),
                 "T": grid.get("T", 200),
+                "kick_std": grid.get("kick_std", 0.0),
+                "kick_every": grid.get("kick_every", 0),
+                "ic_mode": grid.get("ic_mode", "uniform"),
             }
         )
     return out
@@ -57,6 +60,9 @@ def name_of(inst: dict) -> str:
     return (
         f"{inst['system_id']}{po}_N{inst['N']}_noise{inst['noise']:g}_seed{inst['seed']}"
         f"_{inst['graph']}k{inst['mean_degree']:g}d{inst['hyper_density']:g}_M{inst['M']}T{inst['T']}"
+        # data-design options: suffix only when non-default, so v0.1 names are unchanged
+        + (f"_kick{inst['kick_std']:g}e{inst['kick_every']}" if inst.get("kick_std", 0) else "")
+        + (f"_ic{inst['ic_mode']}" if inst.get("ic_mode", "uniform") != "uniform" else "")
     )
 
 
@@ -94,6 +100,9 @@ def main():
                 M=inst["M"],
                 T=inst["T"],
                 seed=inst["seed"],
+                kick_std=inst.get("kick_std", 0.0),
+                kick_every=inst.get("kick_every", 0),
+                ic_mode=inst.get("ic_mode", "uniform"),
             )
             benchmarks.save(b, path)
             spec = b.spec

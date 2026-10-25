@@ -66,7 +66,23 @@ def transition_point(scales, values, level: float = 0.05) -> float:
     return float(np.asarray(scales)[idx[0]]) if len(idx) else float("nan")
 
 
-def hysteresis_width(sw: dict, level: float = 0.05) -> float:
+def transition_level(sw: dict, kind: str = "mean") -> float:
+    """Level that defines "the transition" for a sweep.
+
+    SIS-like prevalence (kind "mean"): an absolute 0.05 (the epidemic is "on"). Kuramoto order
+    parameter r: an absolute level is meaningless because incoherent phases already give
+    r ≈ √(π/4N) (≈ 0.2 at N = 20), so use the midpoint between the lowest and highest r on either branch
+    (audit E6).
+    """
+    if kind != "kuramoto":
+        return 0.05
+    v = np.concatenate([np.asarray(sw["forward"]), np.asarray(sw["backward"])])
+    v = v[np.isfinite(v)]
+    return float(0.5 * (v.min() + v.max())) if len(v) else float("nan")
+
+
+def hysteresis_width(sw: dict, level: float | None = None, kind: str = "mean") -> float:
+    level = transition_level(sw, kind) if level is None else level
     f = transition_point(sw["scales"], sw["forward"], level)
     b = transition_point(sw["scales"], sw["backward"], level)
     return float(f - b)
@@ -75,11 +91,13 @@ def hysteresis_width(sw: dict, level: float = 0.05) -> float:
 def compare_transitions(true_system, pred_system, scales, which="g", kind="mean", **kw) -> dict:
     st = sweep(true_system, scales, which, kind=kind, **kw)
     sp_ = sweep(pred_system, scales, which, kind=kind, **kw)
+    level = transition_level(st, kind)  # the TRUE system's level is used for both (same yardstick)
     return {
         "true": st,
         "pred": sp_,
-        "threshold_true": transition_point(st["scales"], st["forward"]),
-        "threshold_pred": transition_point(sp_["scales"], sp_["forward"]),
-        "hysteresis_true": hysteresis_width(st),
-        "hysteresis_pred": hysteresis_width(sp_),
+        "level": level,
+        "threshold_true": transition_point(st["scales"], st["forward"], level),
+        "threshold_pred": transition_point(sp_["scales"], sp_["forward"], level),
+        "hysteresis_true": hysteresis_width(st, level),
+        "hysteresis_pred": hysteresis_width(sp_, level),
     }

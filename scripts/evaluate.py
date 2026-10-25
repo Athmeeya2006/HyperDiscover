@@ -45,6 +45,8 @@ DYN = [
     "perturbation.hyper_targeted_mean",
 ]
 KEYS = ["spec.system_id", "spec.hyper_kind", "spec.pairwise_only", "spec.N", "spec.noise"]
+RANKING_ONLY = ["corr", "pcorr", "granger", "te", "nri"]
+TRIADIC_METHODS = ["HyperDiscover", "sindy_oracle", "sindy_generic", "this"]
 # a group must differ ONLY by seed: every other spec field, the config and the engine are keys too
 EXTRA_KEYS = ["config_hash", "engine"]
 
@@ -75,6 +77,13 @@ def main():
         bdf = load_metrics(a.baselines, "**/baseline_metrics.json")
         if not bdf.empty:
             df = pd.concat([df, bdf], ignore_index=True)
+    # audit E12: ranking-only baselines have no meaningful operating point (their F1 comes from an arbitrary
+    # median threshold) and pairwise-only methods cannot output hyperedges (0 false hyperedges by construction)
+    rank_only = df["method"].isin(RANKING_ONLY)
+    for c in [c for c in df.columns if c.endswith(".f1")]:
+        df.loc[rank_only, c] = float("nan")
+    fh = [c for c in df.columns if c.startswith("false_hyperedges.")]
+    df.loc[~df["method"].isin(TRIADIC_METHODS), fh] = float("nan")
     if "seconds" in df.columns:  # baselines record wall time as `seconds`, fits as `timings.*`
         tcols = [c for c in df.columns if c.startswith("timings.")]
         df["timings.total"] = df[tcols].sum(axis=1, min_count=1).fillna(df["seconds"])
@@ -113,7 +122,9 @@ def main():
         to_latex(
             tab,
             out / "tables" / f"{name}.tex",
-            caption=f"{name} metrics (mean ± std over seeds)",
+            caption=f"{name} metrics (mean ± std over seeds; n = runs per cell). F1 is blank for "
+            "ranking-only baselines (no operating point) and false-hyperedge counts are blank for methods "
+            "that cannot output hyperedges",
             label=f"tab:{name}",
         )
         print("wrote", out / "tables" / f"{name}.md")

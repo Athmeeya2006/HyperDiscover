@@ -127,6 +127,9 @@ def main():
         hd = HyperDiscover.from_structure_checkpoint(
             out / "structure.pt", X_fit, t, engine, segment_starts=seg
         )
+        # the checkpoint carries the fit-time config; Stage 4–5 settings (distill/select) come from THIS
+        # invocation's --config/--set, which were silently ignored before
+        hd.config = merge_config(hd.config, {k: cfg[k] for k in ("distill", "select") if k in cfg})
         hd.fit_symbolic(X_fit, t, seg, out_dir=out)
     # structure metrics after every stage; equation metrics once equations exist
     from hyperdiscover.eval.run_metrics import run_metrics

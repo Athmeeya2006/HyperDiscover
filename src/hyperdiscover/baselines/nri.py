@@ -11,6 +11,8 @@ Edge scores = encoder probability of "edge", averaged over windows. Pairwise onl
 
 This is a learned baseline: it must be trained like our model (GPU for large N). On CPU it is
 only for smoke tests.
+
+References (references/references.bib): kipf2018neural, gilmer2017neural.
 """
 
 from __future__ import annotations

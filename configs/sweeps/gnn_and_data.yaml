@@ -1,0 +1,29 @@
+# Phase-4 pilot, round 4 (S4 sanity structure): GNN-encoder (amortized, NRI-style) gates vs hard-concrete /
+# alternating, across data designs; reruns the kick variants that crashed in round 3 (weak-form window bug, fixed).
+gnn_default:
+  gating: gnn_encoder
+gnn_short:
+  benchmark: {M: 400, T: 25}
+  gating: gnn_encoder
+gnn_kicks:
+  benchmark: {kick_std: 0.5, kick_every: 10}
+  gating: gnn_encoder
+gnn_sparse_short:
+  benchmark: {M: 400, T: 25, ic_mode: sparse}
+  gating: gnn_encoder
+kicks_hc_lam5x:
+  benchmark: {kick_std: 0.5, kick_every: 10}
+  train: {pairwise: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_pair: 0.05},
+          triadic: {warmup_steps: 500, beta_start: 0.3, beta_end: 0.1, lam_tri: 0.1},
+          joint: {beta_start: 0.2, beta_end: 0.05, lam_pair: 0.05, lam_tri: 0.1}}
+kicks_alt:
+  benchmark: {kick_std: 0.5, kick_every: 10}
+  gating: alternating
+sparse_short_hc_lam5x:
+  benchmark: {M: 400, T: 25, ic_mode: sparse}
+  train: {pairwise: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_pair: 0.05},
+          triadic: {warmup_steps: 500, beta_start: 0.3, beta_end: 0.1, lam_tri: 0.1},
+          joint: {beta_start: 0.2, beta_end: 0.05, lam_pair: 0.05, lam_tri: 0.1}}
+sparse_short_alt:
+  benchmark: {M: 400, T: 25, ic_mode: sparse}
+  gating: alternating

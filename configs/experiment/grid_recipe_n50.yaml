@@ -1,0 +1,15 @@
+# Phase-4 gate item "open hyperedges recovered at N=50" (CLAUDE.md §13) with the winning recipe (alternating gating,
+# SINDy warm start, relaxed readout, median undirected readout D-036; sparse ICs + many short trajectories).
+# Open hyperedges + pairwise-only controls; noise 0 and 1%. Closed hyperedges at N=50 come after this.
+systems: [S1, S2, S3, S4, S5]
+hyper_kinds: [open]
+N: [50]
+noise: [0.0, 0.01]
+seeds: [0]
+pairwise_only_variants: true
+graph: er
+mean_degree: 4.0
+hyper_density: 0.3
+M: 400
+T: 25
+ic_mode: sparse

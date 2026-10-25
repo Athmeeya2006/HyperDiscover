@@ -16,8 +16,10 @@ import numpy as np
 import torch
 
 from .data.dataset import TrainData
+from .model.gnn_gates import node_features
 from .model.structure_model import StructureModel
 from .screen import screen_pairs, screen_triples
+from .systems.base import Structure
 from .train import train_joint, train_pairwise, train_triadic
 from .train.alternating import train_alternating
 
@@ -45,7 +47,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "k_t": 50,
         "n_neighbours": 15,
     },
-    "model": {"hidden": 64, "layers": 3, "init_prob_pair": 0.9, "init_prob_tri": 0.5},
+    "model": {
+        "hidden": 64,
+        "layers": 3,
+        "init_prob_pair": 0.9,
+        "init_prob_tri": 0.5,
+        "gnn": {"snapshots": 64, "hidden": 32},  # gating: gnn_encoder (model/gnn_gates.py)
+    },
     "train": {
         "pairwise": {
             "steps": 3000,
@@ -81,7 +89,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "prune_between_stages": True,
         "prune_threshold": 0.05,
     },
-    "readout": {"threshold": 0.5, "undirected": "max"},
+    "readout": {"threshold": 0.5, "undirected": "median"},
 }
 
 
@@ -121,21 +129,50 @@ def undirected_pair_scores(pair_index: np.ndarray, scores: np.ndarray, mode: str
     acc: dict[tuple[int, int], list[float]] = {}
     for (i, j), s in zip(pair_index, scores):
         acc.setdefault((min(i, j), max(i, j)), []).append(float(s))
-    red = np.max if mode == "max" else np.mean
-    # a missing direction counts as 0 for the mean
-    return {
-        k: float(red(v + [0.0] * (2 - len(v)) if mode == "mean" else v)) for k, v in acc.items()
-    }
+    return {k: _reduce(v, 2, mode) for k, v in acc.items()}
 
 
 def undirected_tri_scores(tri_index: np.ndarray, scores: np.ndarray, mode: str = "max") -> dict:
     acc: dict[tuple[int, int, int], list[float]] = {}
     for t, s in zip(tri_index, scores):
         acc.setdefault(tuple(sorted(int(v) for v in t)), []).append(float(s))
-    red = np.max if mode == "max" else np.mean
-    return {
-        k: float(red(v + [0.0] * (3 - len(v)) if mode == "mean" else v)) for k, v in acc.items()
-    }
+    return {k: _reduce(v, 3, mode) for k, v in acc.items()}
+
+
+def _reduce(v: list[float], n: int, mode: str) -> float:
+    """Combine the per-focal-node scores of one undirected edge (n=2) or hyperedge (n=3).
+
+    ``max``: any member suffices. ``mean``/``median``: a missing member counts as 0. ``median`` is a
+    majority vote: B_ijk is symmetric, so a genuine hyperedge acts on every member, and a triple
+    supported at only one of its three nodes (residual split among triples sharing a neighbour) is
+    rejected (audit 2026-10-26, DECISIONS D-036). For pairs the median equals the mean.
+    """
+    if mode == "max":
+        return float(np.max(v))
+    v = v + [0.0] * (n - len(v))
+    return float(np.median(v) if mode == "median" else np.mean(v))
+
+
+def _screen(cfg, sc, X_masked, dX_masked, periodic, rng):
+    """Stage 1 candidate screening (pairs, then triples from the pair scores)."""
+    pair_index, pscore = screen_pairs(
+        X_masked, dX_masked, sc["k_p"], sc["all_pairs_max_n"], periodic, rng=rng
+    )
+    if cfg["max_order"] >= 3:
+        tri_index, _ = screen_triples(
+            X_masked,
+            dX_masked,
+            pscore,
+            sc["k_p"],
+            sc["k_t"],
+            sc["n_neighbours"],
+            sc["all_triples_max_n"],
+            periodic,
+            rng=rng,
+        )
+    else:
+        tri_index = np.zeros((0, 3), np.int64)
+    return pair_index, tri_index
 
 
 def fit_structure(
@@ -146,9 +183,29 @@ def fit_structure(
     ckpt_dir: str | Path | None = None,
     logger=print,
     stages: tuple[str, ...] | None = None,
+    known_structure: Structure | None = None,
+    candidates: Structure | None = None,
+    fixed_hyperedges: bool = False,
 ) -> StructureResult:
-    """Run screening and staged structure learning on training trajectories X [M, T, N, d]."""
+    """Run screening and staged structure learning on training trajectories X [M, T, N, d].
+
+    ``known_structure``: skip screening and structure selection; the candidates are exactly its edges
+    and focal triples (weights fixed at 1) and only f, g, h, c are trained — e.g. a structure found by
+    joint-kick interventions (intervene/joint_kick.py), with equations learned from trajectories.
+    ``candidates``: replaces Stage-1 screening only (its edges / focal triples are the candidates; the
+    usual structure selection still runs), e.g. joint-kick influence pairs + detected hyperedges.
+    ``fixed_hyperedges`` (with ``candidates``): keep the candidate hyperedges on and select only the
+    pairwise edges (interventional evidence for hyperedges takes precedence over observational selection).
+    """
     cfg = merge_config(DEFAULT_CONFIG, config)
+    if known_structure is not None:
+        alt = {**cfg["train"].get("alternating", {})}
+        alt.update(readout="fixed", warm_start="ones", pair_only_rounds=0)
+        cfg = merge_config(cfg, {"gating": "alternating", "train": {"alternating": alt}})
+    elif candidates is not None and fixed_hyperedges:
+        alt = {**cfg["train"].get("alternating", {})}
+        alt.update(fix_tris=True, pair_only_rounds=0)
+        cfg = merge_config(cfg, {"gating": "alternating", "train": {"alternating": alt}})
     stages = tuple(stages if stages is not None else cfg["schedule"])
     seed = int(cfg["seed"])
     rng = np.random.default_rng(seed)
@@ -175,27 +232,24 @@ def fit_structure(
     sc = cfg["screen"]
     dX_masked = data.dX_np[:, data.time_mask]
     X_masked = X[:, data.time_mask]
-    pair_index, pscore = screen_pairs(
-        X_masked, dX_masked, sc["k_p"], sc["all_pairs_max_n"], periodic, rng=rng
-    )
-    if cfg["max_order"] >= 3:
-        tri_index, _ = screen_triples(
-            X_masked,
-            dX_masked,
-            pscore,
-            sc["k_p"],
-            sc["k_t"],
-            sc["n_neighbours"],
-            sc["all_triples_max_n"],
-            periodic,
-            rng=rng,
+    given = known_structure if known_structure is not None else candidates
+    if given is not None:
+        pair_index = given.pair_index.astype(np.int64)
+        tri_index = (
+            given.tri_index.astype(np.int64)
+            if cfg["max_order"] >= 3
+            else np.zeros((0, 3), np.int64)
         )
     else:
-        tri_index = np.zeros((0, 3), np.int64)
+        pair_index, tri_index = _screen(cfg, sc, X_masked, dX_masked, periodic, rng)
     timings["screen"] = time.time() - t0
     logger(f"[screen] {len(pair_index)} pair candidates, {len(tri_index)} triple candidates")
 
     mc = cfg["model"]
+    feats = None
+    if cfg.get("gating", "hard_concrete") == "gnn_encoder":
+        gc = mc.get("gnn", {})
+        feats = node_features(data.S, data.Y, gc.get("snapshots", 64), periodic, seed)
     model = StructureModel(
         N,
         d,
@@ -209,6 +263,8 @@ def fit_structure(
         mc["init_prob_pair"],
         mc["init_prob_tri"],
         seed,
+        feats,
+        mc.get("gnn", {}).get("hidden", 32),
     ).to(cfg["device"])
     # keep a map from current (possibly pruned) candidates back to the screened lists
     pair_ids = np.arange(len(pair_index))

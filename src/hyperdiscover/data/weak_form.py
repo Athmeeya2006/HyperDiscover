@@ -10,6 +10,8 @@ so the model's RHS F(x) can be matched to data without differentiating x:
 
 Test functions: φ(t) = ((t − a)(b − t))^p normalised so that Σ_l φ_l Δt_l = 1 (the weak
 target is then a weighted average of ẋ over the window).
+
+References (references/references.bib): messenger2021weak, reinbold2020using.
 """
 
 from __future__ import annotations
@@ -50,7 +52,12 @@ def make_weak_form(
         raise ValueError("weak form currently needs a uniform sampling interval")
     dt = float(dt[0])
     T = len(t)
-    window = min(window, T)
+    bounds = list(segment_starts or [0]) + [T]
+    longest = max(hi - lo for lo, hi in zip(bounds[:-1], bounds[1:]))
+    # short kick segments: shrink the window to fit (the requested size is an upper bound)
+    window = min(window, T, longest)
+    if window < 5:
+        raise ValueError(f"segments too short for a weak-form window (longest {longest} points)")
     s = np.arange(window) * dt
     a, b = s[0], s[-1]
     base = (s - a) * (b - s)
@@ -60,7 +67,6 @@ def make_weak_form(
     w[0] = w[-1] = 0.5 * dt
     norm = np.sum(phi * w)
     phi_q, dphi_q = phi * w / norm, dphi * w / norm
-    bounds = list(segment_starts or [0]) + [T]
     starts = []
     for lo, hi in zip(bounds[:-1], bounds[1:]):
         starts.extend(range(lo, hi - window + 1, stride))

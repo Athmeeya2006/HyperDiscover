@@ -15,7 +15,7 @@ import h5py
 import numpy as np
 
 from .data.observe import add_noise
-from .data.simulate import TrajectoryData, simulate_system
+from .data.simulate import TrajectoryData, simulate_system, sparse_ic
 from .graphs.hypergraphs import make_structure
 from .systems import SYSTEMS, make_system
 from .systems.base import HigherOrderSystem, Structure
@@ -53,6 +53,7 @@ def load(
     kick_std: float = 0.0,
     kick_every: int = 0,
     disjoint_hyperedges: bool = False,
+    ic_mode: str = "uniform",
 ) -> Benchmark:
     """Generate (deterministically) one benchmark instance."""
     if system_id not in SYSTEMS:
@@ -71,7 +72,9 @@ def load(
     )
     kw = {"rng": rng} if system_id == "S1" else {}
     system = make_system(system_id, structure, params, **kw)
-    data = simulate_system(system, M, T, dt, rng, kick_std=kick_std, kick_every=kick_every)
+    # ic_mode "sparse": most nodes start near the low end of the IC box (data_design study, CLAUDE.md §17.2)
+    x0 = sparse_ic(system, M, rng) if ic_mode == "sparse" else None
+    data = simulate_system(system, M, T, dt, rng, x0=x0, kick_std=kick_std, kick_every=kick_every)
     data = add_noise(data, noise, rng)
     spec = {
         "version": BENCH_VERSION,
@@ -92,6 +95,8 @@ def load(
         "kick_std": kick_std,
         "kick_every": kick_every,
     }
+    if ic_mode != "uniform":  # only recorded when used, so v0.1 specs are unchanged
+        spec["ic_mode"] = ic_mode
     return Benchmark(system, structure, data, spec)
 
 

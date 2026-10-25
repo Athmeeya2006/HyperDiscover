@@ -14,6 +14,8 @@ Rationale: the shared encoder ties the gates of all candidates together (a learn
 prior over structure), so a false edge cannot be switched on independently of the evidence in the
 two nodes' signals; with free logits every candidate is its own parameter. Gating config:
 ``gating: gnn_encoder`` (pipeline.py), ``model.gnn: {snapshots, hidden}``.
+
+References (references/references.bib): kipf2018neural, gilmer2017neural, battaglia2018relational, lowe2022amortized, zhu2021survey.
 """
 
 from __future__ import annotations
@@ -74,11 +76,13 @@ class GNNGate(nn.Module):
         self.register_buffer("index", index.clone())
         self._enc = [encoder]  # shared, owned by the model (list: not registered twice)
         H = encoder.upd[-1].out_features
-        self.head = _mlp(3 * H, H, 1)
+        # no output bias and a FIXED prior offset: a shared trainable shift saturated every gate at P = 1
+        # (hd-gnn-data-sweep, 2026-10-26), where the hard-concrete clamp kills all gradients; any change
+        # of a logit must now come from the two nodes' features
+        self.head = nn.Sequential(nn.Linear(3 * H, H), nn.SiLU(), nn.Linear(H, 1, bias=False))
         nn.init.zeros_(self.head[-1].weight)  # start at the prior: every gate at init_prob
-        nn.init.zeros_(self.head[-1].bias)
         la0 = math.log(init_prob / (1 - init_prob)) + beta * math.log(-gamma / zeta)
-        self.bias = nn.Parameter(torch.tensor(la0))
+        self.register_buffer("bias", torch.tensor(la0))
 
     @property
     def n(self) -> int:
@@ -99,7 +103,7 @@ class GNNGate(nn.Module):
 
     def gate_parameters(self) -> list[nn.Parameter]:
         """Parameters that define this gate's logits (head, bias and the shared encoder)."""
-        return [*self.head.parameters(), self.bias, *self._enc[0].parameters()]
+        return [*self.head.parameters(), *self._enc[0].parameters()]
 
     def prob_nonzero(self) -> torch.Tensor:
         return torch.sigmoid(self.log_alpha - self.beta * math.log(-self.gamma / self.zeta))

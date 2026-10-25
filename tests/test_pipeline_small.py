@@ -1,9 +1,12 @@
 """CLAUDE.md §12 test 6 (Phase-4 gate): S4, N = 10, two open hyperedges, zero noise, 50
 trajectories → exact structure and equations, on CPU in under ~10 minutes.
 
-This is the acceptance gate, not a smoke test: it is EXPECTED TO FAIL until Phase 3–4
-tuning is done (see RESEARCH_LOG.md). Run with `pytest -m slow`. The quick smoke test below
-only checks that the pipeline runs end to end and produces well-formed outputs.
+This is the acceptance gate, not a smoke test. Recipe that passes it (2026-10-26): alternating
+gating (SINDy warm start + relaxed readout) on 50 trajectories from sparse initial conditions
+(`ic_mode="sparse"`); with uniform initial conditions the same method has false edges and
+hyperedges (data design is decisive). The CPU gate uses the library distillation engine (PySR's
+3 × 600 s budget per function does not fit the 10-minute CPU budget). Run with `pytest -m slow`.
+The quick smoke test below only checks that the pipeline runs end to end.
 """
 
 import pytest
@@ -24,6 +27,7 @@ def _bench():
         M=50,
         T=200,
         seed=0,
+        ic_mode="sparse",
     )
 
 
@@ -69,9 +73,9 @@ def test_structure_checkpoint_roundtrip(tmp_path):
 def test_sanity_gate_s4():
     b = _bench()
     M = b.data.X.shape[0]
-    hd = HyperDiscover(config="default", distill_engine="auto", verbose=True).fit(
-        b.data.X[:43], b.data.t
-    )
+    hd = HyperDiscover(
+        config={"gating": "alternating"}, distill_engine="library", verbose=True
+    ).fit(b.data.X[:43], b.data.t)
     m = run_metrics(hd, b.system, b.data.X_clean[43:], b.data.t)
     assert m["edges"]["fp"] == 0 and m["edges"]["fn"] == 0, m["edges"]
     assert m["hyperedges"]["all"]["fp"] == 0 and m["hyperedges"]["all"]["fn"] == 0, m["hyperedges"][

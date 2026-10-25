@@ -15,8 +15,14 @@ def load_model_state(model: StructureModel, sd: dict) -> None:
     """Load a state dict whose candidate lists may have been pruned (shapes differ)."""
     model.pair_index = sd["pair_index"].clone().to(model.pair_index.device)
     model.tri_index = sd["tri_index"].clone().to(model.tri_index.device)
-    model.pair_gate.log_alpha = nn.Parameter(sd["pair_gate.log_alpha"].clone())
-    model.tri_gate.log_alpha = nn.Parameter(sd["tri_gate.log_alpha"].clone())
+    if getattr(
+        model, "gnn", False
+    ):  # GNN-encoder gates: logits are computed; restore candidate lists
+        model.pair_gate.index = sd["pair_gate.index"].clone().to(model.pair_index.device)
+        model.tri_gate.index = sd["tri_gate.index"].clone().to(model.tri_index.device)
+    else:
+        model.pair_gate.log_alpha = nn.Parameter(sd["pair_gate.log_alpha"].clone())
+        model.tri_gate.log_alpha = nn.Parameter(sd["tri_gate.log_alpha"].clone())
     for name in (
         "pair_w",
         "tri_w",

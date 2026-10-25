@@ -12,6 +12,7 @@ import torch
 from torch import nn
 
 from .gates import HardConcreteGate
+from .gnn_gates import GNNGate, NodeEncoder
 from .messages import Messages
 
 
@@ -39,6 +40,8 @@ class StructureModel(nn.Module):
         init_prob_pair: float = 0.8,
         init_prob_tri: float = 0.5,
         seed: int = 0,
+        node_feats: torch.Tensor | None = None,
+        gnn_hidden: int = 32,
     ) -> None:
         super().__init__()
         gen = torch.Generator().manual_seed(seed)
@@ -53,8 +56,16 @@ class StructureModel(nn.Module):
         if norm is not None:
             kw = {"x_mean": norm.x_mean, "x_std": norm.x_std, "y_std": norm.y_std}
         self.msg = Messages(d, hidden, layers, periodic, **kw)
-        self.pair_gate = HardConcreteGate(len(self.pair_index), init_prob_pair, generator=gen)
-        self.tri_gate = HardConcreteGate(len(self.tri_index), init_prob_tri, generator=gen)
+        # gates: free per-candidate logits (hard-concrete), or logits from a shared GNN encoder over
+        # node signal features (``node_feats`` given; model/gnn_gates.py, gating: gnn_encoder)
+        self.gnn = node_feats is not None
+        if self.gnn:
+            self.gate_encoder = NodeEncoder(node_feats, self.pair_index, gnn_hidden)
+            self.pair_gate = GNNGate(self.gate_encoder, self.pair_index, "pair", init_prob_pair)
+            self.tri_gate = GNNGate(self.gate_encoder, self.tri_index, "tri", init_prob_tri)
+        else:
+            self.pair_gate = HardConcreteGate(len(self.pair_index), init_prob_pair, generator=gen)
+            self.tri_gate = HardConcreteGate(len(self.tri_index), init_prob_tri, generator=gen)
         self.use_c = node_constants
         self.c = nn.Parameter(torch.zeros(n_nodes, d)) if node_constants else None
         self.use_pairs = True
@@ -98,12 +109,15 @@ class StructureModel(nn.Module):
         return w
 
     def normalized_weights(self, kind: str) -> torch.Tensor:
-        """Weights divided by the median non-zero weight of their kind (true edges ≈ 1), clipped to [0, 1]."""
+        """Weights divided by the typical strong weight of their kind (median of weights ≥ 10% of the
+        max; true edges ≈ 1 because g and h are shared). NOT clipped: ranking (AUROC) uses the raw
+        order, and the readout threshold is 0.5 (audit 2026-10-26: clipping created ties at 1, and the
+        median of all non-zero weights was dominated by the many small false weights)."""
         w = self.pair_w if kind == "pair" else self.tri_w
-        nz = w[w > 0]
-        if len(nz) == 0:
+        if len(w) == 0 or float(w.max()) <= 0:
             return torch.zeros_like(w)
-        return (w / nz.median()).clamp(0.0, 1.0)
+        ref = w[w >= 0.1 * w.max()].median()
+        return w / ref
 
     def forward(self, x: torch.Tensor, gate_mode: str = "sample") -> torch.Tensor:
         p = self.parts(x, gate_mode)
@@ -166,23 +180,41 @@ class StructureModel(nn.Module):
             self.tri_gate.keep(tri_keep.to(self.tri_gate.log_alpha.device))
             self.tri_w = self.tri_w[tri_keep.to(self.tri_w.device)]
 
+    def _gate_params(self, kind: str) -> list[nn.Parameter]:
+        gate = self.pair_gate if kind == "pair" else self.tri_gate
+        if self.gnn:  # own head; the shared encoder is handled in set_trainable
+            return list(gate.head.parameters())
+        return [gate.log_alpha]
+
     def set_trainable(self, **flags: bool) -> None:
         """Flags: f, g, h, pair_gates, tri_gates, c."""
         groups = {
             "f": self.msg.f_net.parameters(),
             "g": self.msg.g_net.parameters(),
             "h": self.msg.h_net.parameters(),
-            "pair_gates": [self.pair_gate.log_alpha],
-            "tri_gates": [self.tri_gate.log_alpha],
+            "pair_gates": self._gate_params("pair"),
+            "tri_gates": self._gate_params("tri"),
             "c": [self.c] if self.c is not None else [],
         }
         for name, on in flags.items():
             for p in groups[name]:
                 p.requires_grad_(bool(on))
+        if self.gnn and ("pair_gates" in flags or "tri_gates" in flags):
+            # the shared encoder trains whenever either kind of gate trains
+            on = any(p.requires_grad for k in ("pair", "tri") for p in self._gate_params(k))
+            for p in self.gate_encoder.parameters():
+                p.requires_grad_(on)
 
     def param_groups(self, lr_net: float, lr_gate: float, weight_decay: float) -> list[dict]:
         nets = [p for p in self.msg.parameters() if p.requires_grad]
-        gates = [p for p in (self.pair_gate.log_alpha, self.tri_gate.log_alpha) if p.requires_grad]
+        gate_params = self._gate_params("pair") + self._gate_params("tri")
+        if (
+            self.gnn
+        ):  # encoder + heads are networks: train them at the network rate, not the logit rate
+            gate_params += list(self.gate_encoder.parameters())
+            nets += [p for p in gate_params if p.requires_grad]
+            gate_params = []
+        gates = [p for p in gate_params if p.requires_grad]
         consts = [self.c] if (self.c is not None and self.c.requires_grad) else []
         groups = []
         if nets:

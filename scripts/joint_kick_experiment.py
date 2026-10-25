@@ -34,6 +34,12 @@ def main():
     )
     ap.add_argument("--delta", type=float, default=0.3, help="kick, units of IC-box width")
     ap.add_argument("--states", type=int, default=20, help="operating states S")
+    ap.add_argument(
+        "--state-source",
+        choices=["trajectory", "sparse_ic"],
+        default="trajectory",
+        help="operating states sampled from the benchmark trajectories or sparse initial conditions",
+    )
     ap.add_argument("--repeats", nargs="+", type=int, default=[1, 25], help="readouts averaged")
     ap.add_argument("--alpha", type=float, default=0.01)
     ap.add_argument(
@@ -47,6 +53,7 @@ def main():
     from sklearn.metrics import average_precision_score, roc_auc_score
 
     from hyperdiscover import benchmarks
+    from hyperdiscover.data.simulate import sparse_ic
     from hyperdiscover.intervene.joint_kick import (
         calibrated_pvalues,
         estimate_readout_noise,
@@ -67,7 +74,10 @@ def main():
         st, sysm = b.structure, b.system
         rng = np.random.default_rng([a.seed, N, int(sid[1:])])
         X = b.data.X_clean.reshape(-1, N, b.data.X_clean.shape[-1])
-        xs = X[rng.choice(len(X), a.states, replace=False)]
+        if a.state_source == "sparse_ic":  # low-activity states, away from saturation
+            xs = sparse_ic(sysm, a.states, rng)
+        else:
+            xs = X[rng.choice(len(X), a.states, replace=False)]
         sig = float(b.data.X_clean[..., 0].std(axis=(0, 1)).mean())  # mean per-node signal std
         width = sysm.ic_box[1] - sysm.ic_box[0]
         A = st.adjacency() > 0
@@ -100,6 +110,7 @@ def main():
                 "tau_dt": tau_dt,
                 "repeats": R,
                 "richardson": rich,
+                "state_source": a.state_source,
                 "infl_auroc": roc_auc_score(infl[off], ps[off]),
                 "infl_auprc": average_precision_score(infl[off], ps[off]),
                 "pair_edge_auroc": roc_auc_score(A[off], ps[off]),
@@ -135,9 +146,10 @@ def main():
     df = pd.DataFrame(rows)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    df.to_csv(out / "joint_kick.csv", index=False)
-    (out / "joint_kick.md").write_text(df.to_markdown(index=False, floatfmt=".3f"))
-    print("wrote", out / "joint_kick.csv")
+    stem = "joint_kick" if a.state_source == "trajectory" else f"joint_kick_{a.state_source}"
+    df.to_csv(out / f"{stem}.csv", index=False)
+    (out / f"{stem}.md").write_text(df.to_markdown(index=False, floatfmt=".3f"))
+    print("wrote", out / f"{stem}.csv")
 
 
 if __name__ == "__main__":

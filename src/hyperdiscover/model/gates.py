@@ -6,6 +6,8 @@ z = min(1, max(0, s (ζ − γ) + γ)),  s = σ((log u − log(1 − u) + log α
 * ``mode="deterministic"``: test-time estimator min(1, max(0, σ(log α)(ζ − γ) + γ)); reaches
   exact 0 and 1.
 * ``mode="hard"``: indicator P(z ≠ 0) > threshold (structure readout).
+
+References (references/references.bib): louizos2018learning, maddison2017concrete, jang2017categorical.
 """
 
 from __future__ import annotations

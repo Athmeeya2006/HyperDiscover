@@ -1,0 +1,14 @@
+# Phase-4 gate as CLAUDE.md §12.6 states it (S4, N=10, two open hyperedges, zero noise, 50 trajectories), with the
+# winning recipe: alternating gating (SINDy warm start + relaxed readout) and sparse initial conditions.
+# Round 5's exact structure used M=400/T=25; the gate fixes M=50, so T is the free choice here.
+gate_M50_T200_sparse:
+  benchmark: {M: 50, T: 200, ic_mode: sparse}
+  gating: alternating
+gate_M50_T50_sparse:
+  benchmark: {M: 50, T: 50, ic_mode: sparse}
+  gating: alternating
+gate_M50_T200_uniform:
+  gating: alternating
+gate_M400_T25_sparse_rep:
+  benchmark: {M: 400, T: 25, ic_mode: sparse}
+  gating: alternating

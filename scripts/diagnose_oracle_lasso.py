@@ -30,7 +30,11 @@ def lasso_support(R, G, H, pair_t, tri_t, N, tri_penalty, criterion):
 
 def score(w, true_mask, name):
     on = w > 1e-3 * max(w.max(), 1e-12)
-    tp, fp, fn = int((on & true_mask).sum()), int((on & ~true_mask).sum()), int((~on & true_mask).sum())
+    tp, fp, fn = (
+        int((on & true_mask).sum()),
+        int((on & ~true_mask).sum()),
+        int((~on & true_mask).sum()),
+    )
     tw = w[true_mask]
     print(
         f"  {name:6s} TP {tp} FP {fp} FN {fn}   true-weight range [{tw.min():.3f}, {tw.max():.3f}]  "
@@ -59,7 +63,9 @@ def main():
     true_t = {(t[0], *sorted(t[1:])) for t in b.structure.tri_index}
     mp = np.array([tuple(p) in true_p for p in pairs])
     mt = np.array([(t[0], *sorted(t[1:])) in true_t for t in tris])
-    print(f"{spec['system_id']} N={N}: {mp.sum()} true directed pairs, {mt.sum()} true focal triples")
+    print(
+        f"{spec['system_id']} N={N}: {mp.sum()} true directed pairs, {mt.sum()} true focal triples"
+    )
 
     td = TrainData(b.data.X, b.data.t, segment_starts=b.data.meta["segment_starts"])
     rng = np.random.default_rng(a.seed)

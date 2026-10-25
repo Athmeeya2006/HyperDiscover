@@ -1,6 +1,6 @@
 """Structure metrics (CLAUDE.md §9.1).
 
-Edges and hyperedges are scored at the *undirected* level (a pair's score is the max/mean
+Edges and hyperedges are scored at the *undirected* level (a pair's score is the max/mean/median (default: median, a majority vote over members)
 over its two directed gates; a triple's over its three focal gates). Candidates never
 scored (dropped at screening) are "implicit negatives/positives" with score 0; AUROC/AUPRC
 account for all C(N,2) pairs and C(N,3) triples without enumerating them, by giving one

@@ -97,6 +97,24 @@ def wait_dataset_ready(user: str, timeout: float = 900.0) -> None:
     sys.exit("dataset still processing after 15 min; check kaggle.com before pushing")
 
 
+STAMP = REPO / "runs" / "kaggle" / ".last_upload_hash"
+
+
+def bundle_hash() -> str:
+    """Hash of every file that goes into the source bundle (detects edits since the last upload)."""
+    import hashlib
+
+    h = hashlib.sha1()
+    for item in BUNDLE_ITEMS:
+        src = REPO / item
+        files = sorted(src.rglob("*")) if src.is_dir() else [src]
+        for f in files:
+            if f.is_file() and "__pycache__" not in f.parts and f.suffix != ".pyc":
+                h.update(str(f.relative_to(REPO)).encode())
+                h.update(f.read_bytes())
+    return h.hexdigest()
+
+
 def upload_code(a):
     user = username()
     with tempfile.TemporaryDirectory() as tmp:
@@ -142,10 +160,17 @@ def upload_code(a):
                 [kaggle_bin(), "datasets", "create", "-p", str(stage), "--dir-mode", "zip"]
             )  # private by default
     wait_dataset_ready(user)
+    STAMP.parent.mkdir(parents=True, exist_ok=True)
+    STAMP.write_text(bundle_hash())
 
 
 def push(a):
     user = username()
+    # a kernel runs the LAST UPLOADED source: re-upload automatically if anything changed since
+    # (a grid YAML created after the upload made hd-recipe-n20 v1 fail with FileNotFoundError)
+    if not STAMP.exists() or STAMP.read_text().strip() != bundle_hash():
+        print("source changed since the last upload -> uploading first", flush=True)
+        upload_code(argparse.Namespace(message=f"auto before push {a.name}"))
     if not a.grid and not a.sweep:
         sys.exit("push needs --grid (fits) or --sweep + --experiment (config sweep)")
     if a.sweep and not a.experiment:

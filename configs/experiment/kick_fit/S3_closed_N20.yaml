@@ -1,0 +1,4 @@
+# Joint-kick structure + observational equations (scripts/kick_then_fit.py), S3 closed hyperedges, N=20.
+# Observational data: sparse ICs + many short trajectories (the data design that made the S4 sanity structure exact).
+benchmark: {system_id: S3, N: 20, noise: 0.0, hyper_kind: closed, M: 400, T: 25, ic_mode: sparse, seed: 0}
+config: {gating: alternating}

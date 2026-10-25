@@ -1,0 +1,28 @@
+# Round 6 (S4 sanity, sparse ICs + M=400/T=25 — the data design that made edges exact): triadic gates closed
+# because the summed L0 penalty (λ_tri × Σp over 360 triples) dwarfs the ≈0.01 loss the triadic term is worth.
+# Scale λ down keeping λ_t = 2 λ_p in the joint stage (CLAUDE.md §7); the last variant breaks the ratio (diagnostic).
+# Pairwise stage keeps λ_p = 0.05 (edges were exact with it).
+lam_p005_t01:
+  benchmark: {M: 400, T: 25, ic_mode: sparse}
+  train:
+    pairwise: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_pair: 0.05}
+    triadic: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_tri: 0.01}
+    joint: {beta_start: 0.2, beta_end: 0.05, lam_pair: 0.005, lam_tri: 0.01}
+lam_p002_t004:
+  benchmark: {M: 400, T: 25, ic_mode: sparse}
+  train:
+    pairwise: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_pair: 0.05}
+    triadic: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_tri: 0.004}
+    joint: {beta_start: 0.2, beta_end: 0.05, lam_pair: 0.002, lam_tri: 0.004}
+lam_p0005_t001:
+  benchmark: {M: 400, T: 25, ic_mode: sparse}
+  train:
+    pairwise: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_pair: 0.05}
+    triadic: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_tri: 0.001}
+    joint: {beta_start: 0.2, beta_end: 0.05, lam_pair: 0.0005, lam_tri: 0.001}
+lam_p05_t002_diag:
+  benchmark: {M: 400, T: 25, ic_mode: sparse}
+  train:
+    pairwise: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_pair: 0.05}
+    triadic: {warmup_steps: 1000, beta_start: 0.3, beta_end: 0.1, lam_tri: 0.002}
+    joint: {beta_start: 0.2, beta_end: 0.05, lam_pair: 0.05, lam_tri: 0.002}

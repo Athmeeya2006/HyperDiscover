@@ -1,6 +1,6 @@
 eval:
   readout_threshold: 0.5
-  undirected_reduce: max
+  undirected_reduce: median
   exact_recovery: {tol_coef: 0.05, tol_resid: 1.0e-3, complexity_slack: 2}
   forecast: {n_ic: 10, horizon_steps: 200, vpt_threshold: 0.3}
   bifurcation:

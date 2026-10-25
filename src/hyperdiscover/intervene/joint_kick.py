@@ -16,6 +16,8 @@ pairwise response D_ij = x_i^{j}(τ) − x_i^{0}(τ) ≈ τ δ ∂ẋ_i/∂x_j (
 
 Interventions per operating state: N single kicks + N(N−1)/2 joint kicks (one joint kick of (j, k)
 is read out at every i simultaneously).
+
+References (references/references.bib): richardson1911approximate, richardson1927deferred, dunn1961multiple, timme2007revealing.
 """
 
 from __future__ import annotations
@@ -157,3 +159,41 @@ def hyperedge_scores(tri_score: np.ndarray, pairs: np.ndarray) -> dict[tuple[int
             tri_score[a, col[(b, c)]], tri_score[b, col[(a, c)]], tri_score[c, col[(a, b)]]
         )
     return out
+
+
+def kick_candidates(
+    resp: dict[str, np.ndarray], alpha: float = 0.01, sigma_read: float | None = None
+) -> tuple:
+    """Truth-free structure from kick responses (χ² against readout noise, Bonferroni at ``alpha``).
+
+    Returns (Structure of candidates, info). Candidate edges = undirected pairs with a significant
+    direct single-kick influence in either direction (this includes influence that acts only through
+    a hyperedge, so they are CANDIDATES for the observational fit to select from); hyperedges = node
+    triples with a significant mixed (joint-kick) response at any focal node. Noiseless responses
+    (sigma_read = 0) fall back to a 1e-6 relative floor.
+    """
+    from ..systems.base import Structure
+
+    N = resp["base"].shape[1]
+    sigma = (
+        estimate_readout_noise(resp["base"], resp["base_rep"]) if sigma_read is None else sigma_read
+    )
+    n_tri_tests = N * (N - 1) * (N - 2) // 2
+    if sigma > 0:
+        pp, pt = calibrated_pvalues(resp, sigma)
+        infl = pp < alpha / (N * (N - 1))
+        hs = hyperedge_scores(-pt, resp["pairs"])
+        hyper = [k for k, v in hs.items() if -v < alpha / n_tri_tests]
+    else:
+        ps, ts = mixed_difference_scores(resp, 1.0, 1.0)
+        infl = ps > 1e-6 * ps.max()
+        hs = hyperedge_scores(ts, resp["pairs"])
+        top = max(hs.values()) if hs else 0.0
+        hyper = [k for k, v in hs.items() if v > 1e-6 * top]
+    edges = sorted({tuple(sorted((i, j))) for i, j in zip(*np.where(infl)) if i != j})
+    st = Structure(
+        N,
+        np.array(edges, dtype=np.int64).reshape(-1, 2),
+        np.array(hyper, dtype=np.int64).reshape(-1, 3),
+    )
+    return st, {"sigma_read": sigma, "n_candidate_edges": len(edges), "n_hyperedges": len(hyper)}

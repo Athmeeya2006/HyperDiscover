@@ -4,6 +4,8 @@ All functions take X [M, T, N, d] (time on axis 1) and return dX/dt with the sam
 Total-variation regularised differentiation (``tv``) follows the small-data lagged-diffusivity
 iteration of Chartrand (2011, "Numerical differentiation of noisy, nonsmooth data"; verify);
 Tikhonov (second-difference penalty) is the smooth alternative (DECISIONS.md D-010, D-025).
+
+References (references/references.bib): savitzky1964smoothing, chartrand2011numerical.
 """
 
 from __future__ import annotations

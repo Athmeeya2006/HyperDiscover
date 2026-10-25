@@ -1,0 +1,13 @@
+# Phase-3 gate rerun for the systems that failed on default data (S2, S4, S5 — data stuck at one fixed point,
+# RESEARCH_LOG 2026-10-26): same N=50, 1% noise, pairwise-only, but sparse initial conditions + many short
+# trajectories (CLAUDE.md §17.2). Same total samples as M=50 × T=200.
+systems: [S2, S4, S5]
+hyper_kinds: [open]
+N: [50]
+noise: [0.01]
+seeds: [0]
+pairwise_only: true
+max_order: 2
+M: 400
+T: 25
+ic_mode: sparse

@@ -2,9 +2,11 @@
 
 For each message function we take a shortlist from its Pareto front (best PySR-style score
 −Δ log(loss)/Δ complexity, plus the most accurate), form all combinations, refit constants
-on the data with the inferred structure, and rank by BIC on held-out trajectories (with
-validation rollout error reported alongside). Drop-one-term variants of the winner are
+on the data with the inferred structure, and rank by BIC on held-out trajectories, using the
+AR(1) effective sample size of the residuals (validation rollout error reported alongside). Drop-one-term variants of the winner are
 then tried as "nearby" models.
+
+References (references/references.bib): schwarz1978estimating, zou2007degrees, bayley1946effective, bertsimas2016best.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ import numpy as np
 import sympy as sp
 
 from ..data.simulate import rk4_integrate
-from ..systems.base import XJ, XK, Structure
+from ..systems.base import XI, XJ, XK, Structure
 from .pysr_runner import Candidate, DistillResult
 from .refit import RefitResult, SymbolicModel, refit
 
@@ -63,6 +65,37 @@ def drop_one_variants(expr: sp.Expr, kind: str = "") -> list[sp.Expr]:
     return [sp.Add(*[t for q, t in enumerate(terms) if q not in g]) for g in groups]
 
 
+def prune_small_terms(
+    expr: sp.Expr, kind: str, S: np.ndarray, rel: float = 0.01, n: int = 4000, seed: int = 0
+):
+    """Variant with ALL additive terms whose RMS contribution on data states is < ``rel`` × the RMS of the
+    whole expression removed jointly (None if nothing is that small). Catches several tiny terms that
+    partly cancel each other, which one-at-a-time elimination cannot remove. S: states [n_s, N]."""
+    terms = list(sp.Add.make_args(sp.expand(expr)))
+    if len(terms) <= 1:
+        return None
+    rng = np.random.default_rng(seed)
+    N = S.shape[1]
+    rows = rng.integers(0, len(S), n)
+    cols = (
+        np.stack([rng.permutation(N)[:3] for _ in range(n)])
+        if N >= 3
+        else rng.integers(0, N, (n, 3))
+    )
+    args = {XI: S[rows, cols[:, 0]], XJ: S[rows, cols[:, 1]], XK: S[rows, cols[:, 2]]}
+    syms = {"f": [XI], "g": [XI, XJ], "h": [XI, XJ, XK]}[kind]
+
+    def rms(e):
+        v = sp.lambdify(syms, e, "numpy")(*[args[x] for x in syms])
+        return float(np.sqrt(np.mean(np.broadcast_to(np.asarray(v, float), (n,)) ** 2)))
+
+    total = rms(expr)
+    keep = [t for t in terms if rms(t) >= rel * total]
+    if len(keep) == len(terms) or not keep:
+        return None
+    return sp.Add(*keep)
+
+
 @dataclass
 class SelectionEntry:
     exprs: dict[str, sp.Expr]
@@ -91,15 +124,31 @@ class SelectionResult:
     entries: list[SelectionEntry] = field(default_factory=list)
 
 
+def _effective_n(res: np.ndarray) -> float:
+    """AR(1) effective sample size n·(1−ρ)/(1+ρ) of residuals [M, T, N, d] (ρ = pooled lag-1
+    autocorrelation along time), floored at one sample per trajectory and node. Consecutive time
+    points are strongly correlated, so counting every one as independent made BIC's log(n)
+    penalty too weak and let spurious small terms survive (audit E8)."""
+    n = float(res[..., 0].size)
+    if res.shape[1] < 3 or not np.all(np.isfinite(res)):
+        return n
+    a, b = res[:, 1:].ravel(), res[:, :-1].ravel()
+    den = np.sqrt(np.sum(a * a) * np.sum(b * b))
+    rho = float(np.clip(np.sum(a * b) / den, 0.0, 0.999)) if den > 0 else 0.0
+    floor = float(res.shape[0] * res.shape[2])
+    return max(floor, n * (1 - rho) / (1 + rho))
+
+
 def _val_metrics(fit: RefitResult, structure: Structure, Xv, dXv, tv, periodic, horizon: int = 20):
     model = SymbolicModel(structure, fit.exprs, fit.node_constants, periodic)
     # plain means (not nanmean): a candidate that is NaN anywhere must score as infinitely bad,
     # and every score must be finite or +inf so min()/sorted() never see a NaN key
     with np.errstate(all="ignore"):
         pred = model.rhs(Xv)
-        mse = float(np.mean((pred - dXv) ** 2))
+        res = pred - dXv
+        mse = float(np.mean(res**2))
         mse = mse if np.isfinite(mse) else float("inf")
-        n = Xv[..., 0].size
+        n = _effective_n(res)
         bic = (
             float(n * np.log(max(mse, 1e-300)) + fit.n_params * np.log(n))
             if np.isfinite(mse)
@@ -129,7 +178,14 @@ def select_model(
     try_drop_one: bool = True,
     rng: np.random.Generator | None = None,
     logger=print,
+    weak=None,
+    X_weak: np.ndarray | None = None,
+    max_drop_rounds: int = 10,
+    drop_tol: float = 0.02,
+    r2_tol: float = 1e-5,
 ) -> SelectionResult:
+    """``weak`` (a WeakForm) + ``X_weak`` (contiguous training trajectories): refit constants on the
+    weak-form residual instead of explicit derivatives (CLAUDE.md §15: noise ≥ 5%, audit E9)."""
     rng = rng if rng is not None else np.random.default_rng(0)
     lists = {}
     for kind in ("f", "g", "h"):
@@ -140,7 +196,10 @@ def select_model(
     entries: list[SelectionEntry] = []
 
     def evaluate(exprs, origin):
-        fit = refit(exprs, structure, X_train, dX_train, node_constants, rng=rng)
+        if weak is not None:
+            fit = refit(exprs, structure, X_weak, None, node_constants, weak=weak, rng=rng)
+        else:
+            fit = refit(exprs, structure, X_train, dX_train, node_constants, rng=rng)
         mse, bic, roll = _val_metrics(fit, structure, X_val, dX_val, t, periodic)
         e = SelectionEntry(fit.exprs, fit, mse, bic, roll, origin)
         entries.append(e)
@@ -150,10 +209,37 @@ def select_model(
         evaluate({"f": fe, "g": ge, "h": he}, "combination")
     best = min(entries, key=lambda e: e.val_bic)
     if try_drop_one:
-        for kind in ("f", "g", "h"):
-            for v in drop_one_variants(best.exprs[kind], kind):
+        # greedy backward elimination: drop the term (h: term + its j↔k mirror) whose removal raises the
+        # validation error least; accept the drop if BIC improves OR the error rises by less than
+        # `drop_tol` (relative). The tolerance is needed on clean data, where the true model's residual is
+        # only derivative-estimation error and BIC keeps any term that shaves a sliver off it (e.g.
+        # 3e-4·cos(x_i − 2x_j + 2x_k) in h). One round only (the old rule) could never remove several
+        # small spurious terms, e.g. f = −x_i + 0.015 cos x_i − 0.034 + 0.02 e^{−x_i}.
+        # `r2_tol`: also drop when the error rises by < r2_tol × Var(target), i.e. the term explains a
+        # negligible share of the dynamics. On clean data the residual floor is derivative-estimation
+        # error, and terms like 6e-5·x_i² fit it by > drop_tol relative (Kaggle hd-gate-clean, D-036).
+        var_y = float(np.var(dX_val)) if np.isfinite(np.var(dX_val)) else 0.0
+        for _ in range(max_drop_rounds):
+            cands = [
                 evaluate({**best.exprs, kind: v}, f"drop_one:{kind}")
-        best = min(entries, key=lambda e: e.val_bic)
+                for kind in ("f", "g", "h")
+                for v in drop_one_variants(best.exprs[kind], kind)
+            ]
+            S_states = X_train[..., 0].reshape(-1, X_train.shape[2])
+            for kind in ("f", "g", "h"):  # several tiny (possibly cancelling) terms removed jointly
+                v = prune_small_terms(best.exprs[kind], kind, S_states)
+                if v is not None:
+                    cands.append(evaluate({**best.exprs, kind: v}, f"prune_small:{kind}"))
+            ok = [
+                e
+                for e in cands
+                if e.val_bic < best.val_bic
+                or e.val_mse <= best.val_mse * (1 + drop_tol)
+                or e.val_mse - best.val_mse <= r2_tol * var_y
+            ]
+            if not ok:
+                break
+            best = min(ok, key=lambda e: (e.val_mse, e.val_bic))
     logger(
         f"[select] {len(entries)} models refit; best BIC {best.val_bic:.1f}, rollout nRMSE {best.rollout_nrmse:.3g}"
     )

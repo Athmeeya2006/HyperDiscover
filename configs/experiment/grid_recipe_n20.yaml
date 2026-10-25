@@ -1,0 +1,15 @@
+# Winning recipe on the S4 sanity case (round 5: alternating gating with SINDy warm start + relaxed readout,
+# sparse ICs + many short trajectories) scaled to all systems at N=20, open and closed hyperedges, plus the
+# pairwise-only variants (false-hyperedge control). Noise 0 and 1%.
+systems: [S1, S2, S3, S4, S5]
+hyper_kinds: [open, closed]
+N: [20]
+noise: [0.0, 0.01]
+seeds: [0]
+pairwise_only_variants: true
+graph: er
+mean_degree: 4.0
+hyper_density: 0.3
+M: 400
+T: 25
+ic_mode: sparse

@@ -11,6 +11,8 @@ regressor, and report
 Low values predict that observational data cannot tell a hyperedge from two pairwise edges
 (the identifiability problem in CLAUDE.md §2), whatever the inference method. This uses the
 true h on real trajectories, so it characterises the benchmark, not a fitted model.
+
+References (references/references.bib): hooker2007generalized, lengerich2020purifying, buja1989linear, hastie1990generalized.
 """
 
 from __future__ import annotations
@@ -19,10 +21,9 @@ import numpy as np
 from sklearn.ensemble import HistGradientBoostingRegressor
 
 
-def triadic_samples(
-    system, X: np.ndarray, n: int = 20000, rng=None
-) -> tuple[np.ndarray, np.ndarray]:
-    """Inputs [S, 3] = (x_i, x_j, x_k) at true focal triples on data states, and h values [S]."""
+def triadic_samples(system, X: np.ndarray, n: int = 20000, rng=None, return_groups: bool = False):
+    """Inputs [S, 3] = (x_i, x_j, x_k) at true focal triples on data states, and h values [S]
+    (+ the trajectory index of every sample [S] with ``return_groups``)."""
     rng = rng if rng is not None else np.random.default_rng(0)
     tris = system.structure.tri_index
     if len(tris) == 0:
@@ -32,6 +33,8 @@ def triadic_samples(
     t = tris[rng.integers(0, len(tris), n)]
     Z = np.stack([S[s, t[:, 0]], S[s, t[:, 1]], S[s, t[:, 2]]], 1)
     hv = system.h(Z[:, :1], Z[:, 1:2], Z[:, 2:3])[:, 0]
+    if return_groups:
+        return Z, hv, s // X.shape[1]  # X: [M, T, N, d] -> trajectory of each sampled state
     return Z, hv
 
 
@@ -44,7 +47,12 @@ def _features(a: np.ndarray, b: np.ndarray, periodic: bool) -> np.ndarray:
 
 
 def pure_interaction_fraction(
-    Z: np.ndarray, hv: np.ndarray, periodic: bool = False, n_iter: int = 12, seed: int = 0
+    Z: np.ndarray,
+    hv: np.ndarray,
+    periodic: bool = False,
+    n_iter: int = 12,
+    seed: int = 0,
+    groups: np.ndarray | None = None,
 ) -> dict:
     """Backfit h ≈ u(x_i, x_j) + u(x_i, x_k) with ONE shared u (symmetric additive surrogate).
 
@@ -54,8 +62,15 @@ def pure_interaction_fraction(
     simultaneous updates make the part of u that depends on x_i alone flip sign every iteration.
     """
     rng = np.random.default_rng(seed)
-    perm = rng.permutation(len(hv))
-    fit, ev = perm[: len(hv) // 2], perm[len(hv) // 2 :]
+    if groups is not None and len(np.unique(groups)) >= 4:
+        # split by TRAJECTORY: states of one trajectory are strongly correlated, so a per-sample split
+        # puts near-duplicates on both sides and flatters the surrogate (audit E14)
+        ug = rng.permutation(np.unique(groups))
+        in_fit = np.isin(groups, ug[: len(ug) // 2])
+        fit, ev = np.where(in_fit)[0], np.where(~in_fit)[0]
+    else:
+        perm = rng.permutation(len(hv))
+        fit, ev = perm[: len(hv) // 2], perm[len(hv) // 2 :]
     xi, xj, xk = Z[:, 0], Z[:, 1], Z[:, 2]
     F1, F2 = _features(xi, xj, periodic), _features(xi, xk, periodic)
     var_ev = float(np.var(hv[ev])) or 1.0
@@ -86,13 +101,13 @@ def pure_interaction_fraction(
         "history": history,
         "h_std": float(np.sqrt(np.var(hv))),
         "n_samples": int(len(hv)),
-        "evaluation": "held-out half",
+        "evaluation": "held-out half (by trajectory)" if groups is not None else "held-out half",
     }
 
 
 def identifiability_report(system, X: np.ndarray, n: int = 20000, seed: int = 0) -> dict:
-    Z, hv = triadic_samples(system, X, n, np.random.default_rng(seed))
-    out = pure_interaction_fraction(Z, hv, system.periodic, seed=seed)
+    Z, hv, grp = triadic_samples(system, X, n, np.random.default_rng(seed), return_groups=True)
+    out = pure_interaction_fraction(Z, hv, system.periodic, seed=seed, groups=grp)
     # Var(triadic part) / Var(full vector field) on random data states. Can exceed 1 when the self
     # and pairwise parts partly cancel the triadic part (it is a ratio, not a share).
     S = X.reshape(-1, X.shape[2], X.shape[3])

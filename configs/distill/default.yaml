@@ -1,6 +1,7 @@
 distill:
   engine: auto             # pysr | library | auto (pysr if importable)
   n_samples: 4000
+  refit_loss: auto         # derivative | weak | auto (weak if any training stage used the weak loss; CLAUDE.md §15)
   pysr:
     binary_operators: ["+", "-", "*", "/"]
     unary_operators: [sin, cos, exp, square, cube]
@@ -13,3 +14,5 @@ distill:
 select:
   shortlist_k: 3
   drop_one: true
+  drop_tol: 0.02           # backward elimination: drop a term if val error rises < 2% (or BIC improves)
+  r2_tol: 1.0e-5           # ...or if it rises by < 1e-5 × Var(target) (negligible explained variance)

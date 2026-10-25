@@ -32,17 +32,6 @@ DESIGNS = {
 SANITY = {"N": 10, "hyper_kind": "open", "n_hyper": 2, "graph": "er", "mean_degree": 3.0}
 
 
-def sparse_ic(system, n: int, rng: np.random.Generator, p_low: float = 0.7) -> np.ndarray:
-    """Each node starts near the low end of the IC box with prob. p_low, else uniform in the box.
-
-    Decorrelates x_j and x_k across samples, so joint (x_j, x_k) configurations are visited.
-    """
-    lo, hi = system.ic_box
-    x0 = system.sample_ic(n, rng)
-    low = rng.random(x0.shape) < p_low
-    return np.where(low, lo + 0.05 * (hi - lo) * rng.random(x0.shape), x0)
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--systems", nargs="+", default=["S2", "S4", "S5"])
@@ -57,7 +46,7 @@ def main():
     import pandas as pd
 
     from hyperdiscover import benchmarks
-    from hyperdiscover.data.simulate import simulate_system
+    from hyperdiscover.data.simulate import simulate_system, sparse_ic
     from hyperdiscover.eval.identifiability import identifiability_report
 
     cases = [] if a.no_sanity else [("S4", {**SANITY, "case": "sanity"})]

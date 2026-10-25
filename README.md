@@ -10,10 +10,11 @@ dx_i/dt = f(x_i) + c_i + Σ_j A_ij g(x_i, x_j) + Σ_{j<k} B_ijk h(x_i, x_j, x_k)
 Given trajectories X ∈ R^{M×T×N×d} and no network, HyperDiscover infers A (who interacts
 pairwise), B (which triples interact jointly) and symbolic f, g, h shared by all nodes.
 
-> **Status: research prototype (pre-Phase 1).** All pipeline stages are implemented and
-> tested on CPU, but the neural structure learner does **not yet** pass the S4 N=10 sanity
-> gate (many false-positive edges; see `RESEARCH_LOG.md`). No results from this repo should
-> be cited yet. The project brief is `CLAUDE.md`; design choices are in `DECISIONS.md`.
+> **Status: research prototype.** All pipeline stages are implemented and tested on CPU/GPU. On the
+> S4 N=10 sanity case the structure learner (alternating gating with a SINDy warm start and a relaxed
+> readout) recovers all edges and both hyperedges exactly when trained on informative data (sparse
+> initial conditions, many short trajectories); on default data it does not yet. Benchmark-wide
+> results are in progress. No numbers from this repo should be cited yet.
 
 ## Pipeline
 
@@ -21,10 +22,11 @@ pairwise), B (which triples interact jointly) and symbolic f, g, h shared by all
 |---|---|---|
 | 0 targets | `data/derivatives.py`, `data/weak_form.py` | Savitzky–Golay / Tikhonov derivatives, or weak-form (integration against test functions) |
 | 1 screening | `screen/` | cheap scores to keep top-K candidate pairs (N > 200) and triples (N > 20) |
-| 2 model | `model/` | hard-concrete (L0) gate per candidate; shared MLPs f, g, h (h symmetric in j, k) |
-| 3 training | `train/` | pairwise → triadic → joint schedule, λ_triadic > λ_pairwise (Occam) |
+| 2 model | `model/` | gated message passing on a learned hypergraph: shared MLPs f, g, h (h symmetric in j, k); gates = hard-concrete (L0), alternating convex weights, or a GNN encoder (`gating:`) |
+| 3 training | `train/` | pairwise → triadic → joint schedule, λ_triadic > λ_pairwise (Occam); or alternating MLP steps / per-node relaxed LASSO with a SINDy warm start (`train/alternating.py`) |
 | 4 distillation | `distill/pysr_runner.py` | PySR on sampled g, h, f messages (subprocess; Julia) |
-| 5 refit + selection | `distill/refit.py`, `select.py` | least-squares refit of all constants (float64), BIC + rollout selection |
+| 5 refit + selection | `distill/refit.py`, `select.py` | least-squares refit of all constants (float64), BIC (effective sample size) + backward elimination |
+| interventions (optional) | `intervene/joint_kick.py` | kick single nodes and node pairs; the mixed response is zero for any pairwise coupling, so it detects hyperedges model-free (`scripts/kick_then_fit.py`) |
 
 Benchmarks S1–S5 (`systems/`): higher-order Kuramoto, Lotka–Volterra, nonlinear consensus,
 SIS, and a synthetic mutualistic variant; S6 (Rössler, d = 3) is a stretch placeholder.
@@ -133,13 +135,7 @@ python scripts/kaggle/kaggle_job.py pull --name s4-sanity   # -> runs/kaggle/s4-
 
 The kernel regenerates its benchmark instances deterministically, runs an environment check on
 the GPU, fits with `run_many.py`, and returns run directories in the same format as local runs and
-Ada. Ada: see `docs/ADA_RUNBOOK.md`; personal settings live in the git-ignored
-`configs/paths/ada.local.yaml`.
-
-## Docs
-
-- `docs/ADA_RUNBOOK.md`: step-by-step for the cluster, once the Ada details are in.
-- `docs/API.md`: the estimator, configuration keys, benchmarks and metrics.
+Ada. Cluster settings live in the git-ignored `configs/paths/ada.local.yaml`.
 
 ## Development
 

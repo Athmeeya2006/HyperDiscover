@@ -1,0 +1,19 @@
+# Round 5 (S4 sanity): alternating gating after the 2026-10-26 model audit — SINDy warm start + relaxed-LASSO
+# readout (standardised selection, NNLS refit, absolute threshold 0.5 on scale-normalised weights).
+alt_fixed:
+  gating: alternating
+alt_fixed_no_warm:
+  gating: alternating
+  train: {alternating: {warm_start: ones}}
+alt_fixed_lasso_readout:
+  gating: alternating
+  train: {alternating: {readout: lasso}}
+alt_fixed_kicks:
+  benchmark: {kick_std: 0.5, kick_every: 10}
+  gating: alternating
+alt_fixed_sparse_short:
+  benchmark: {M: 400, T: 25, ic_mode: sparse}
+  gating: alternating
+alt_fixed_long:
+  gating: alternating
+  train: {alternating: {rounds: 14, steps_per_round: 600, first_round_steps: 2500}}
