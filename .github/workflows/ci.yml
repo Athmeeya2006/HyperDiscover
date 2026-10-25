@@ -137,7 +137,7 @@ jobs:
           python scripts/profile_memory.py --device cpu --N 6 --steps 2 --batch 8 --hidden 8
           python scripts/kaggle/kaggle_job.py --help > /dev/null
           python -m py_compile scripts/kaggle/kernel_entry.py scripts/validate_this.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: smoke-outputs
