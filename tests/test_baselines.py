@@ -56,7 +56,7 @@ def test_baselines_return_scores(fn, s4):
     b, X, dX = s4
     N = X.shape[2]
     out = {
-        "this": lambda: B.this_reconstruct(X, dX)["pair_scores"],
+        "this": lambda: _this(X, dX)["pair_scores"],
         "arni": lambda: B.arni(X, dX)["pair_scores"],
         "corr": lambda: B.correlation_scores(X),
         "pcorr": lambda: B.partial_correlation_scores(X),
@@ -86,3 +86,9 @@ def test_threshold_tuning_is_truth_free_and_sane(s4):
     assert chosen["val_mse"] <= 1.05 * best + 1e-15  # sparsest model within 5% of the best
     lam, ttab = tune_this(X[:15], dX[:15], X[15:], dX[15:])
     assert lam in [t["threshold"] for t in ttab]
+
+
+def _this(X, dX):
+    from hyperdiscover.baselines.this_reimpl import this_reconstruct  # GPL-3.0 port, opt-in import
+
+    return this_reconstruct(X, dX)

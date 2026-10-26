@@ -1,0 +1,14 @@
+# Noise sweep at N=20 (recipe data): 5 % and 10 %, open/closed + pairwise controls, seed 0.
+# Run twice: derivative loss (default) and weak form (--extra "--set data.deriv_method=... / train loss weak").
+systems: [S1, S2, S3, S4, S5]
+hyper_kinds: [open, closed]
+N: [20]
+noise: [0.05, 0.10]
+seeds: [0]
+pairwise_only_variants: true
+graph: er
+mean_degree: 4.0
+hyper_density: 0.3
+M: 400
+T: 25
+ic_mode: sparse

@@ -1,8 +1,13 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# This file is a port of the official THIS code (GPL-3.0, LICENSE file at tag v2.0 of
+# github.com/TaylorBasedHypergraphInference/THIS) and is therefore licensed under GPL-3.0, NOT under the
+# MIT licence of the rest of HyperDiscover. It is not imported by the hyperdiscover package; only the
+# baseline scripts import it explicitly (DECISIONS.md D-040).
 """Baseline 2: THIS, Taylor-based Hypergraph Inference using SINDy (Delabays, De Pasquale,
 Dörfler & Zhang, Nature Communications 16, 2025; doi:10.1038/s41467-025-57664-2).
 
-Official code: https://github.com/TaylorBasedHypergraphInference/THIS (v2.0, Julia, CC-BY-4.0,
-Zenodo doi:10.5281/zenodo.10530470). This module is a line-by-line Python port of its core
+Official code: https://github.com/TaylorBasedHypergraphInference/THIS (v2.0, Julia; LICENSE file GPL-3.0 —
+the Zenodo record doi:10.5281/zenodo.10530470 lists CC-BY-4.0 in its metadata; we follow the stricter one). This module is a line-by-line Python port of its core
 functions ``get_θd``, ``mySINDy`` and ``this`` (file ``this.jl``), validated against the
 official Julia code in ``tests/test_this_port.py`` / ``scripts/validate_this.py``
 (DECISIONS.md D-022).

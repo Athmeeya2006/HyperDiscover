@@ -1,0 +1,5 @@
+# W2: derivative (Savitzky–Golay) vs weak-form loss in alternating gating at 5 % / 10 % noise.
+# Local S4 check (5 %): derivative edges/hyperedges F1 1.0/1.0; weak 0.74/0.80 (RESEARCH_LOG).
+derivative: {}
+weak: {train.alternating.loss: weak, data.weak_kw.window: 11}
+derivative_wide_sg: {data.deriv_kw.window: 13}

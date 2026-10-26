@@ -51,7 +51,9 @@ def run_metrics(hd, true_system, X_test: np.ndarray, t: np.ndarray, threshold: f
         if not len(truth.hyperedges):
             truth_exprs = {k: v for k, v in truth_exprs.items() if k != "h"}
         inputs = held_out_inputs(true_system, X_test)
-        m["equations"] = equation_report(hd.equations_, truth_exprs, inputs)
+        m["equations"] = equation_report(
+            hd.equations_, truth_exprs, inputs, node_constants=true_system.has_node_constants
+        )
         m["equations"]["discovered"] = {k: str(v) for k, v in hd.equations_.items()}
         m["equations"]["discovered_latex"] = {k: sp.latex(v) for k, v in hd.equations_.items()}
         disc = hd.discovered_system()

@@ -27,7 +27,7 @@ ALL = [
     "pcorr",
     "granger",
     "te",
-]  # + "nri" (trained)
+]  # + "this_local" (paper's local protocol), "nri", "hypergnn" (trained)
 
 
 def main():
@@ -45,6 +45,9 @@ def main():
 
     from hyperdiscover import baselines as B
     from hyperdiscover import benchmarks
+    from hyperdiscover.baselines.this_reimpl import (
+        this_reconstruct,  # GPL-3.0 port (DECISIONS D-040)
+    )
     from hyperdiscover.data.derivatives import estimate_derivatives
     from hyperdiscover.eval.structure_metrics import (
         edge_metrics,
@@ -91,7 +94,29 @@ def main():
                 lam = 0.1
                 if not a.no_tune:
                     lam, tuning = tune_this(X_tr, dX_tr, X_va, dX_va, x0=x0)
-                r = B.this_reconstruct(X, dX, lam=lam, x0=x0)
+                r = this_reconstruct(X, dX, lam=lam, x0=x0)
+            elif meth == "this_local":
+                # THIS is a local Taylor method (the paper samples a small box around x0 = 0). For phases:
+                # co-rotating frame (couplings depend on differences only), wrap to (−π, π], keep samples
+                # inside |x| < box; non-periodic systems: samples within one std box of the data mean.
+                Xl, dXl = X, dX
+                if per:
+                    cm = np.angle(np.exp(1j * X[..., 0]).mean(-1, keepdims=True))[..., None]
+                    # ẋ_i depends only on phase differences, which the shift and the wrap leave unchanged
+                    # (mod 2π), so the derivative targets stay as they are
+                    Xl = np.angle(np.exp(1j * (X - cm)))
+                Xf, dXf = Xl.reshape(-1, Xl.shape[-2], 1), dXl.reshape(-1, Xl.shape[-2], 1)
+                ctr = 0.0 if per else Xf.mean(0, keepdims=True)
+                rad = np.abs(Xf - ctr).max(axis=(1, 2))
+                keep = rad <= np.quantile(rad, 0.3)  # the 30 % of samples closest to the base point
+                Xk, dXk = Xf[keep][None], dXf[keep][None]
+                x0 = 0.0 if per else None
+                lam = 0.1
+                if not a.no_tune:
+                    n_k = Xk.shape[1]
+                    lam, tuning = tune_this(Xk[:, : n_k * 4 // 5], dXk[:, : n_k * 4 // 5],
+                                            Xk[:, n_k * 4 // 5 :], dXk[:, n_k * 4 // 5 :], x0=x0)
+                r = this_reconstruct(Xk, dXk, lam=lam, x0=x0)
             elif meth == "arni":
                 r = B.arni(X, dX, per)
             elif meth == "corr":
@@ -106,6 +131,10 @@ def main():
                     data.t,
                     steps=a.nri_steps,
                     device="cuda" if a.device == "cuda" else "cpu",
+                )
+            elif meth == "hypergnn":  # SPHINX-style latent incidence (learned, structure only; G3)
+                r = B.latent_incidence_baseline(
+                    X, dX, steps=a.nri_steps, device="cuda" if a.device == "cuda" else "cpu"
                 )
             elif meth == "te":
                 r = {
@@ -124,7 +153,9 @@ def main():
         # regression baselines: a nonzero coefficient is a detection -> threshold just above 0
         thr = (
             1e-12
-            if meth in ("sindy_oracle", "sindy_generic", "this", "arni")
+            if meth in ("sindy_oracle", "sindy_generic", "this", "this_local", "arni")
+            else 0.5
+            if meth == "hypergnn"  # memberships / adjacency are probabilities
             else float(np.median(list(pu.values()) or [0]))
         )
         m = {
@@ -143,7 +174,7 @@ def main():
         if len(st.hyperedges):
             # methods that can output hyperedges are always scored (all-zero scores if none survive),
             # so an empty output counts as chance-level ranking instead of being dropped
-            triadic = meth in ("sindy_oracle", "sindy_generic", "this")
+            triadic = meth in ("sindy_oracle", "sindy_generic", "this", "this_local", "hypergnn")
             m["hyperedges"] = hyperedge_metrics(tu, st, thr) if (tu or triadic) else None
         else:
             m["false_hyperedges"] = false_hyperedge_rate(tu, st.n_nodes, thr)

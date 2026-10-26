@@ -76,6 +76,10 @@ def setup() -> None:
         subprocess.call(
             [sys.executable, "-m", "pip", "install", "-q", *[names.get(m, m) for m in missing]]
         )
+    if JOB.get("engine") in ("pysr", "auto"):
+        # PySR + Julia (kernel has internet): install, then import once to download/precompile Julia
+        subprocess.call([sys.executable, "-m", "pip", "install", "-q", "pysr==2.7.2", "juliacall==0.9.36"])
+        subprocess.call([sys.executable, "-c", "import pysr; print('pysr', pysr.__version__)"])
     subprocess.call(
         [
             sys.executable,
@@ -136,21 +140,26 @@ def run_grid() -> int:
     ]
     if JOB.get("count"):
         cmd += ["--count", str(JOB["count"])]
+    if JOB.get("variants"):
+        cmd += ["--variants", str(REPO / JOB["variants"])]
     rc = subprocess.call(cmd, cwd=REPO)
     if JOB.get("stage", "fit") == "all":  # CPU distillation in the same kernel
         for run in sorted((OUT / "runs").glob("*/seed0")):
+            if not (run / "structure.pt").exists():  # fit failed; already counted in rc
+                continue
             rc |= subprocess.call(
                 [
                     sys.executable,
                     str(REPO / "scripts" / "run_pipeline.py"),
                     "--benchmark-file",
-                    str(BENCH / f"{run.parent.name}.h5"),
+                    str(BENCH / f"{run.parent.name.split('__')[0]}.h5"),
                     "--stage",
                     "distill",
                     "--engine",
                     JOB.get("engine", "library"),
                     "--out",
                     str(run),
+                    *JOB.get("extra", "").split(),  # e.g. --set distill.pysr.timeout_in_seconds=300
                 ],
                 cwd=REPO,
             )
@@ -202,10 +211,23 @@ def finish(rc: int, t0: float) -> None:
     sys.exit(rc)
 
 
+def run_script() -> int:
+    """Any repo script (analysis / kick experiments): `python <script> <args> --out OUT/script`."""
+    import shlex
+
+    return subprocess.call(
+        [sys.executable, str(REPO / JOB["script"]), *shlex.split(JOB.get("script_args") or ""),
+         "--out", str(OUT / "script")],
+        cwd=REPO,
+    )
+
+
 def main():
     t0 = time.time()
     setup()
-    if JOB.get("sweep"):
+    if JOB.get("script"):
+        rc = run_script()
+    elif JOB.get("sweep"):
         rc = run_sweep()
     elif JOB.get("baselines"):
         rc = run_baselines()

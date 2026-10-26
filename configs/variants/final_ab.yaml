@@ -1,0 +1,4 @@
+# Main-comparison candidates (§18.15 W1): current default vs pair lock + stability selection (D-039 A/B winner on
+# sparse S4 data: control false hyperedges 7 → 2 with no hyperedge loss).
+base: {}
+lock_stab: {train.alternating.pair_lock: true, train.stability.n_boot: 30}

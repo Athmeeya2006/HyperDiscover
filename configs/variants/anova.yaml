@@ -1,0 +1,6 @@
+# W9: functional-ANOVA pure-interaction penalty in alternating gating; judged by combined coupling error and
+# transfer to unseen networks (closed-hyperedge S1/S5 models transferred badly despite exact structure).
+base: {}
+anova_0.3: {train.alternating.anova: 0.3}
+anova_1: {train.alternating.anova: 1.0}
+anova_3: {train.alternating.anova: 3.0}

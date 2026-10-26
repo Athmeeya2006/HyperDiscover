@@ -1,0 +1,14 @@
+# W7: S3 (exp(−|x_j − x_k|) coupling) and S5 (rational couplings) cannot be exact with the library engine;
+# PySR distillation on the recipe N=20 instances, noise 0, seed 0 (same instances as hd-recipe-n20-v3).
+systems: [S3, S5]
+hyper_kinds: [open, closed]
+N: [20]
+noise: [0.0]
+seeds: [0]
+pairwise_only_variants: true
+graph: er
+mean_degree: 4.0
+hyper_density: 0.3
+M: 400
+T: 25
+ic_mode: sparse

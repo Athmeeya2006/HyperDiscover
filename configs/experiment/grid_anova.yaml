@@ -1,0 +1,12 @@
+# W9 instances: closed + open hyperedges on S1, S3, S5 (where h attribution/transfer failed), N=20, recipe data.
+systems: [S1, S3, S5]
+hyper_kinds: [open, closed]
+N: [20]
+noise: [0.0]
+seeds: [0]
+graph: er
+mean_degree: 4.0
+hyper_density: 0.3
+M: 400
+T: 25
+ic_mode: sparse

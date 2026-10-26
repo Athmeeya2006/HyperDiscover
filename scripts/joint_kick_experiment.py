@@ -32,7 +32,8 @@ def main():
     ap.add_argument(
         "--taus", nargs="+", type=float, default=[1.0, 4.0], help="in units of system dt"
     )
-    ap.add_argument("--delta", type=float, default=0.3, help="kick, units of IC-box width")
+    ap.add_argument("--deltas", nargs="+", type=float, default=[0.3],
+                    help="kick sizes, units of IC-box width (kick-size study: 0.05 0.1 0.2 0.3 0.5)")
     ap.add_argument("--states", type=int, default=20, help="operating states S")
     ap.add_argument(
         "--state-source",
@@ -47,6 +48,7 @@ def main():
     )
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", default="paper/tables")
+    ap.add_argument("--stem", default=None, help="output file stem (default joint_kick[_<state source>])")
     a = ap.parse_args()
 
     import pandas as pd
@@ -89,15 +91,17 @@ def main():
         off = ~np.eye(N, dtype=bool)
         true_h = {tuple(sorted(h)) for h in np.asarray(st.hyperedges).tolist()}
         n_tri_tests = N * (N - 1) * (N - 2) // 2
-        for noise, tau_dt, R, rich in itertools.product(a.noises, a.taus, a.repeats, a.richardson):
+        for noise, tau_dt, R, rich, delta in itertools.product(
+            a.noises, a.taus, a.repeats, a.richardson, a.deltas
+        ):
             if noise == 0 and R > 1:
                 continue
             tau = tau_dt * sysm.default_dt
             t0 = time.time()
             resp = kick_responses(
-                sysm, xs, a.delta, tau, noise * sig / width, rng, n_repeats=R, richardson=bool(rich)
+                sysm, xs, delta, tau, noise * sig / width, rng, n_repeats=R, richardson=bool(rich)
             )
-            ps, ts = mixed_difference_scores(resp, a.delta, tau, width)
+            ps, ts = mixed_difference_scores(resp, delta, tau, width)
             hs = hyperedge_scores(ts, resp["pairs"])
             keys = list(hs)
             y_h = np.array([k in true_h for k in keys])
@@ -110,6 +114,7 @@ def main():
                 "tau_dt": tau_dt,
                 "repeats": R,
                 "richardson": rich,
+                "delta": delta,
                 "state_source": a.state_source,
                 "infl_auroc": roc_auc_score(infl[off], ps[off]),
                 "infl_auprc": average_precision_score(infl[off], ps[off]),
@@ -137,7 +142,7 @@ def main():
             row["seconds"] = round(time.time() - t0, 2)
             rows.append(row)
             print(
-                f"{sid} {kind:8s} N={N:3d} noise={noise:.2f} tau={tau_dt}dt R={R:2d} rich={rich}  "
+                f"{sid} {kind:8s} N={N:3d} noise={noise:.2f} tau={tau_dt}dt R={R:2d} rich={rich} δ={delta}  "
                 f"influence AUROC {row['infl_auroc']:.3f} TP/FP/FN {row.get('infl_tp')}/"
                 f"{row.get('infl_fp')}/{row.get('infl_fn')}  hyper AUROC {row['hyper_auroc']:.3f} "
                 f"TP/FP/FN {row.get('hyper_tp')}/{row.get('hyper_fp')}/{row.get('hyper_fn')}",
@@ -146,7 +151,7 @@ def main():
     df = pd.DataFrame(rows)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    stem = "joint_kick" if a.state_source == "trajectory" else f"joint_kick_{a.state_source}"
+    stem = a.stem or ("joint_kick" if a.state_source == "trajectory" else f"joint_kick_{a.state_source}")
     df.to_csv(out / f"{stem}.csv", index=False)
     (out / f"{stem}.md").write_text(df.to_markdown(index=False, floatfmt=".3f"))
     print("wrote", out / f"{stem}.csv")

@@ -21,7 +21,8 @@ from .model.structure_model import StructureModel
 from .screen import screen_pairs, screen_triples
 from .systems.base import Structure
 from .train import train_joint, train_pairwise, train_triadic
-from .train.alternating import train_alternating
+from .train.alternating import AlternatingConfig, train_alternating
+from .train.stability import StabilityConfig, stabilize
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "seed": 0,
@@ -31,9 +32,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "periodic": False,
     # identifiability schedule (a) from CLAUDE.md §7 Stage 3; "joint" alone is the Phase-4 alternative
     "schedule": ["pairwise", "triadic", "joint"],
-    # "hard_concrete" (CLAUDE.md §7 Stage 2, default) or "alternating" (MLP steps <-> per-node
-    # non-negative BIC LASSO for the edge weights; DECISIONS.md D-029). Alternating ignores `schedule`.
-    "gating": "hard_concrete",
+    # "alternating" (default since CLAUDE.md §18.4 P0: MLP steps <-> per-node non-negative BIC LASSO for
+    # the edge weights; DECISIONS.md D-029; ignores `schedule`), "hard_concrete" (CLAUDE.md §7 Stage 2)
+    # or "gnn_encoder" (model/gnn_gates.py).
+    "gating": "alternating",
     "data": {
         "deriv_method": "savgol",
         "deriv_kw": {"window": 9, "polyorder": 3},
@@ -46,6 +48,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "all_triples_max_n": 12,
         "k_t": 50,
         "n_neighbours": 15,
+        "n_resid": 15,  # extra triadic partners ranked by pairwise-residual correlation (screen/triadic.py)
     },
     "model": {
         "hidden": 64,
@@ -88,6 +91,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         },
         "prune_between_stages": True,
         "prune_threshold": 0.05,
+        # alternating gating only: stability selection + per-triple BIC test after the schedule
+        # (train/stability.py, §18.4 P0); n_boot 0 = off until the A/B sweep decides the default
+        "stability": {"n_boot": 0, "threshold": 0.8, "bic_test": True, "samples": 3000},
     },
     "readout": {"threshold": 0.5, "undirected": "median"},
 }
@@ -169,6 +175,7 @@ def _screen(cfg, sc, X_masked, dX_masked, periodic, rng):
             sc["all_triples_max_n"],
             periodic,
             rng=rng,
+            n_resid=sc.get("n_resid", 0),
         )
     else:
         tri_index = np.zeros((0, 3), np.int64)
@@ -291,6 +298,9 @@ def fit_structure(
         t0 = time.time()
         alt = cfg["train"].get("alternating", {})
         histories.append(_tag(train_alternating(model, data, alt, seed, logger), pair_ids, tri_ids))
+        st = StabilityConfig.from_dict(cfg["train"].get("stability"))
+        if st.n_boot > 0 and alt.get("readout", "relaxed") != "fixed":
+            stabilize(model, data, AlternatingConfig.from_dict(alt), st, seed, logger)
         timings["alternating"] = time.time() - t0
         stages = ()  # the alternating schedule replaces the staged one
     if "pairwise" in stages:

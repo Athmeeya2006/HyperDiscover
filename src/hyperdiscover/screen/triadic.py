@@ -4,12 +4,16 @@ For each node i:
   1. fit a pairwise ridge model of ẋ_i on self features of x_i and per-pair features of its
      top-K_p screened sources (x_j, x_i x_j, x_j², and sin/cos(x_j − x_i) for phases);
   2. take the residual r_i;
-  3. score every pair (j, k) from i's top-L neighbours (and all pairs when N is small) by the
+  3. build the partner pool: i's top-L pairwise neighbours ∪ the top-L_r nodes whose own features
+     (``_pair_feats``) best correlate with r_i — open-hyperedge partners are not pairwise neighbours
+     and often rank low on the pairwise score (S2 N=50: 31 % of true partners in the top 15;
+     RESEARCH_LOG 2026-10-26), but they do explain the pairwise residual;
+  4. score every pair (j, k) from the pool (and all pairs when N is small) by the
      best |corr(r_i, φ(x_i, x_j, x_k))| over generic joint features φ: products
      (x_j x_k, x_i x_j x_k, x_i² x_j x_k) and symmetric functions of u = x_j − x_i,
      v = x_k − x_i (u v, |u − v|(u + v), (u − v)²(u + v)); sin/cos(x_j + x_k − 2x_i) and
      sin/cos(x_j + x_k) for phases;
-  4. keep the top-K_t pairs per node.
+  5. keep the top-K_t pairs per node.
 """
 
 from __future__ import annotations
@@ -61,6 +65,23 @@ def _ridge_residual(D: np.ndarray, y: np.ndarray, alpha: float = 1e-4) -> np.nda
     return y - Dn @ w
 
 
+def _residual_partners(
+    Xs: np.ndarray, r: np.ndarray, i: int, n: int, periodic: bool
+) -> np.ndarray:
+    """The n nodes v ≠ i whose features φ(x_i, x_v) best correlate with the standardised residual r [S]."""
+    N = Xs.shape[1]
+    others = np.array([v for v in range(N) if v != i])
+    xi = Xs[:, i : i + 1]
+    xv = Xs[:, others]
+    if periodic:
+        F = np.stack([np.sin(xv - xi), np.cos(xv - xi), np.sin(xv), np.cos(xv)], -1)
+    else:
+        F = np.stack([xv, xi * xv, xv**2, xi**2 * xv], -1)  # [S, N-1, 4]
+    F = (F - F.mean(0)) / (F.std(0) + 1e-12)
+    score = np.abs(np.einsum("s,svf->vf", r, F) / len(r)).max(-1)
+    return others[np.argsort(-score)[: min(n, len(others))]]
+
+
 def screen_triples(
     X: np.ndarray,
     dX: np.ndarray,
@@ -72,6 +93,8 @@ def screen_triples(
     periodic: bool = False,
     max_samples: int = 20000,
     rng: np.random.Generator | None = None,
+    n_resid: int = 15,
+    resid_k: int = 8,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Candidate focal triples.
 
@@ -102,7 +125,19 @@ def screen_triples(
         if N <= all_triples_max_n:
             pool = [v for v in range(N) if v != i]
         else:
-            pool = list(order[: min(n_neighbours, N - 1)])
+            pool = set(order[: min(n_neighbours, N - 1)].tolist())
+            if n_resid > 0:
+                # partner ranking uses a residual after only the top resid_k sources: with all k_p
+                # sources, the pair features of hyperedge partners absorb their marginal signal
+                Dp = np.concatenate(
+                    [_self_feats(xi, periodic)]
+                    + [_pair_feats(xi, Xs[:, j], periodic) for j in order[:resid_k]],
+                    1,
+                )
+                rp = _ridge_residual(Dp, y)
+                rp = (rp - rp.mean()) / (rp.std() + 1e-12)
+                pool |= set(_residual_partners(Xs, rp, i, n_resid, periodic).tolist())
+            pool = sorted(pool)
         pairs = np.array(list(combinations(sorted(pool), 2)), dtype=np.int64).reshape(-1, 2)
         if len(pairs) == 0:
             continue

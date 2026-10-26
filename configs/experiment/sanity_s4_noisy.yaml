@@ -1,0 +1,5 @@
+# S4 sanity instance on recipe data at 5 % noise (weak-form vs derivative loss check, §18.15 W2).
+benchmark: {system_id: S4, N: 10, noise: 0.05, hyper_kind: open, n_hyper: 2, graph: er, mean_degree: 3.0,
+            M: 400, T: 25, seed: 0, ic_mode: sparse}
+config: {}
+distill_engine: auto

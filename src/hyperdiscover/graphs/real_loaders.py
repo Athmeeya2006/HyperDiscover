@@ -63,3 +63,43 @@ def load_xgi(
     s = structure_from_hyperedge_list(len(nodes), hes)
     s.meta.update({"source": f"xgi:{name}"})
     return s
+
+
+def connected_subhypergraph(
+    structure: Structure, n: int, rng: np.random.Generator, max_hyper: int | None = None
+) -> Structure:
+    """Induced sub-structure on n nodes grown by BFS from a random high-degree node (keeps it connected).
+
+    Only edges / hyperedges with ALL members inside are kept (no invented smaller interactions);
+    ``max_hyper`` caps the number of hyperedges (random subset) so dense contact data stay simulable.
+    """
+    N = structure.n_nodes
+    nbr: list[set] = [set() for _ in range(N)]
+    for a, b in np.asarray(structure.edges).tolist():
+        nbr[a].add(b)
+        nbr[b].add(a)
+    for a, b, c in np.asarray(structure.hyperedges).tolist():
+        nbr[a] |= {b, c}
+        nbr[b] |= {a, c}
+        nbr[c] |= {a, b}
+    deg = np.array([len(s) for s in nbr])
+    top = np.argsort(-deg)[: max(1, N // 10)]
+    start = int(rng.choice(top))
+    order, seen, queue = [], {start}, [start]
+    while queue and len(order) < n:
+        v = queue.pop(0)
+        order.append(v)
+        nxt = sorted(nbr[v] - seen)
+        rng.shuffle(nxt)
+        for u in nxt:
+            seen.add(u)
+            queue.append(u)
+    idx = {v: i for i, v in enumerate(order)}
+    E = [[idx[a], idx[b]] for a, b in np.asarray(structure.edges).tolist() if a in idx and b in idx]
+    H = [[idx[a], idx[b], idx[c]] for a, b, c in np.asarray(structure.hyperedges).tolist()
+         if a in idx and b in idx and c in idx]
+    if max_hyper is not None and len(H) > max_hyper:
+        H = [H[q] for q in sorted(rng.choice(len(H), max_hyper, replace=False))]
+    return Structure(len(order), np.array(E, dtype=np.int64).reshape(-1, 2),
+                     np.array(H, dtype=np.int64).reshape(-1, 3),
+                     {**structure.meta, "subgraph_nodes": len(order)})

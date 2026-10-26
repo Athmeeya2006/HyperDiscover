@@ -1,0 +1,14 @@
+# Same as grid_p0_target.yaml with the recipe data design (sparse ICs, M=400, T=25) for comparison.
+# + pairwise-only control. Target: hyperedge F1 >= 0.8 over 5 seeds, 0 hyperedges on the control.
+systems: [S4]
+hyper_kinds: [open]
+N: [10]
+noise: [0.0, 0.01]
+seeds: [0, 1, 2, 3, 4]
+pairwise_only_variants: true
+graph: er
+mean_degree: 3.0
+hyper_density: 0.2
+M: 400
+T: 25
+ic_mode: sparse

@@ -171,8 +171,8 @@ def push(a):
     if not STAMP.exists() or STAMP.read_text().strip() != bundle_hash():
         print("source changed since the last upload -> uploading first", flush=True)
         upload_code(argparse.Namespace(message=f"auto before push {a.name}"))
-    if not a.grid and not a.sweep:
-        sys.exit("push needs --grid (fits) or --sweep + --experiment (config sweep)")
+    if not a.grid and not a.sweep and not a.script:
+        sys.exit("push needs --grid (fits), --sweep + --experiment (config sweep) or --script")
     if a.sweep and not a.experiment:
         sys.exit("--sweep needs --experiment")
     job = {
@@ -187,6 +187,9 @@ def push(a):
         "engine": a.engine,
         "baselines": a.baselines,  # with --grid: run these baselines instead of HyperDiscover fits
         "nri_steps": a.nri_steps,
+        "variants": a.variants,
+        "script": a.script,  # run a repo script instead: python <script> <script_args> --out OUT/script
+        "script_args": a.script_args,  # with --grid: config variants per instance (run_many --variants)
     }
     entry = (
         (REPO / "scripts" / "kaggle" / "kernel_entry.py")
@@ -254,6 +257,9 @@ def main():
         "--baselines", nargs="+", default=None, help="with --grid: baseline methods, e.g. nri"
     )
     p.add_argument("--nri-steps", type=int, default=2000)
+    p.add_argument("--variants", default=None, help="with --grid: variants YAML relative to the repo")
+    p.add_argument("--script", default=None, help="repo script to run (gets --out)")
+    p.add_argument("--script-args", default="", help="quoted arguments for --script")
     p.add_argument("--cpu", action="store_true")
     p.add_argument(
         "--accelerator", default=None, help='e.g. "NvidiaTeslaT4" (default), "NvidiaTeslaP100"'

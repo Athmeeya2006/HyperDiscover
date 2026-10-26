@@ -1,0 +1,7 @@
+# §18.4 P0 A/B: stability selection and the Occam pair lock (train/stability.py, train/alternating.py)
+base: {}
+stab: {train.stability.n_boot: 30}
+lock: {train.alternating.pair_lock: true}
+lock_stab: {train.alternating.pair_lock: true, train.stability.n_boot: 30}
+warm_guard: {train.alternating.warm_guard: true}
+lock_stab_guard: {train.alternating.pair_lock: true, train.stability.n_boot: 30, train.alternating.warm_guard: true}

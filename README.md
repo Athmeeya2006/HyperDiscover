@@ -12,8 +12,8 @@ pairwise), B (which triples interact jointly) and symbolic f, g, h shared by all
 
 > **Status: research prototype.** All pipeline stages are implemented and tested on CPU/GPU. On the
 > S4 N=10 sanity case the structure learner (alternating gating with a SINDy warm start and a relaxed
-> readout) recovers all edges and both hyperedges exactly when trained on informative data (sparse
-> initial conditions, many short trajectories); on default data it does not yet. Benchmark-wide
+> readout) recovers all edges, both hyperedges and the exact equations f, g, h when trained on informative
+> data (sparse initial conditions, many short trajectories); on default data it does not yet. Benchmark-wide
 > results are in progress. No numbers from this repo should be cited yet.
 
 ## Pipeline
@@ -143,7 +143,7 @@ Ada. Cluster settings live in the git-ignored `configs/paths/ada.local.yaml`.
 make test     # fast tests
 make lint
 pytest -m pysr        # PySR tests (needs JULIA_DEPOT_PATH)
-pytest -m slow        # S4 sanity gate (currently fails; that is the open research problem)
+pytest -m slow        # S4 sanity gate (S4, N=10, sparse initial conditions; ~3 min on CPU)
 ```
 
 CI (`.github/workflows/`):

@@ -142,7 +142,11 @@ class StructureModel(nn.Module):
             return torch.zeros((), device=x.device)
         sel = torch.randperm(H, device=x.device)[: min(H, max_tris)]
         i, j, k = (self.tri_index[sel, c] for c in range(3))
-        w = self.tri_gate.prob_nonzero()[sel]
+        if getattr(self, "weight_mode", False):  # alternating gating: active triples (all, if none yet)
+            on = (self.tri_w[sel] > 0).to(x.dtype)
+            w = on if bool(on.any()) else torch.ones_like(on)
+        else:
+            w = self.tri_gate.prob_nonzero()[sel]
         xi, xj, xk = x[:, i], x[:, j], x[:, k]
         B = x.shape[0]
         mj = torch.zeros_like(xi)

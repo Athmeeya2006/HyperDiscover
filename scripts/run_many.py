@@ -14,6 +14,7 @@ Measure memory first (scripts/profile_memory.py) to choose --per-gpu.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -50,6 +51,12 @@ def main():
     ap.add_argument("--cpu-workers", type=int, default=4, help="workers when no GPU is visible")
     ap.add_argument("--threads", type=int, default=2, help="torch CPU threads per worker")
     ap.add_argument("--extra", default="", help="extra args for run_pipeline.py (quoted)")
+    ap.add_argument(
+        "--variants",
+        default=None,
+        help="YAML {variant: {dotted.key: value}}: run every instance under every variant "
+        "(run dir <instance>__<variant>, overrides passed as --set)",
+    )
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
@@ -58,22 +65,36 @@ def main():
     gpus = visible_gpus()
     slots = [g for g in gpus for _ in range(a.per_gpu)] or [None] * a.cpu_workers
     here = Path(__file__).resolve().parent
+    variants = yaml.safe_load(Path(a.variants).read_text()) if a.variants else {None: {}}
     jobs = []
     for q, inst in enumerate(sel):
         name = name_of(inst)
-        out = Path(a.runs_dir) / name / "seed0"
-        if (out / "structure.pt").exists():
-            continue
-        jobs.append((q, name, out))
+        for vname, over in variants.items():
+            run_name = name if vname is None else f"{name}__{vname}"
+            out = Path(a.runs_dir) / run_name / "seed0"
+            if (out / "structure.pt").exists():
+                continue
+            sets = [f"--set={k}={json.dumps(v) if isinstance(v, (dict, list)) else v}" for k, v in (over or {}).items()]
+            jobs.append((q, name, out, sets))
     print(
         f"{len(sel)} instances, {len(jobs)} to run, {len(slots)} slots on GPUs {gpus or 'none (CPU)'}"
     )
     if a.dry_run:
-        for q, name, out in jobs:
-            print(q, name, "->", out)
+        for q, name, out, sets in jobs:
+            print(q, name, "->", out, *sets)
         return
 
-    def run(slot_idx, name, out):
+    # generate every needed benchmark file ONCE before launching (variants of one instance used to race on
+    # the same .h5: "OSError: Can't synchronously read data" in hd-p0-ab-sparse)
+    for name in sorted({n for _, n, _, _ in jobs}):
+        if not (Path(a.bench_dir) / f"{name}.h5").exists():
+            subprocess.run(
+                [sys.executable, str(here / "make_benchmark.py"), "--grid", a.grid, "--out", a.bench_dir,
+                 "--index", str(insts.index(next(i for i in insts if name_of(i) == name)))],
+                check=True,
+            )
+
+    def run(slot_idx, name, out, sets):
         gpu = slots[slot_idx % len(slots)]
         env = {
             **os.environ,
@@ -110,15 +131,16 @@ def main():
             "--out",
             str(out),
             *a.extra.split(),
+            *sets,
         ]
         t0 = time.time()
         with open(out / "fit.log", "w") as log:
             rc = subprocess.call(cmd, env=env, stdout=log, stderr=subprocess.STDOUT)
-        return name, rc, time.time() - t0, gpu
+        return out.parent.name, rc, time.time() - t0, gpu
 
     failures = 0
     with ThreadPoolExecutor(max_workers=len(slots)) as pool:
-        futs = [pool.submit(run, k, name, out) for k, (_, name, out) in enumerate(jobs)]
+        futs = [pool.submit(run, k, name, out, sets) for k, (_, name, out, sets) in enumerate(jobs)]
         for f in as_completed(futs):
             name, rc, sec, gpu = f.result()
             failures += rc != 0

@@ -11,7 +11,6 @@ from __future__ import annotations
 import numpy as np
 
 from .sindy_full import basis_terms, build_node_library, generic_terms, sindy_full
-from .this_reimpl import get_theta_d
 
 SINDY_GRID = (1e-4, 3e-4, 1e-3, 3e-3, 0.01, 0.03, 0.1, 0.3)
 THIS_GRID = (1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 0.1, 0.3)
@@ -81,7 +80,8 @@ def tune_sindy(
 
 def tune_this(X, dX, Xv, dXv, dmax=2, x0=0.0, grid=THIS_GRID, tol=0.05, max_samples=5000, rng=None):
     rng = rng if rng is not None else np.random.default_rng(0)
-    from .this_reimpl import my_sindy
+    # GPL-3.0 port, imported lazily so the MIT package does not import it (LICENSE, DECISIONS D-040)
+    from .this_reimpl import get_theta_d, my_sindy
 
     Xs, Ys = _flat(X, dX, max_samples, rng)
     Xvs, Yvs = _flat(Xv, dXv, max(1000, max_samples // 2), rng)

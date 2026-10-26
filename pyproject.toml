@@ -8,7 +8,8 @@ version = "0.1.0.dev0"
 description = "Joint discovery of higher-order network structure and symbolic governing equations from node time series."
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [{ name = "HyperDiscover authors" }]
+authors = [{ name = "Athmeeya Kashyap" }]
+license = { text = "MIT (src/hyperdiscover/baselines/this_reimpl.py: GPL-3.0-or-later)" }
 classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Scientific/Engineering",

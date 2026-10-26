@@ -29,27 +29,49 @@ def _eval(expr, kind, Xin):
         )
 
 
-def functional_nrmse(expr_pred, expr_true, kind: str, Xin: np.ndarray) -> float:
-    """RMSE(pred − true) / std(true) on inputs Xin [S, n_inputs] (or / RMS(true) if std = 0)."""
+def functional_nrmse(
+    expr_pred, expr_true, kind: str, Xin: np.ndarray, ref_scale: float | None = None
+) -> float:
+    """RMSE(pred − true) / std(true) on inputs Xin [S, n_inputs] (or / RMS(true) if std = 0; or / ref_scale
+    if the true function is identically 0)."""
     yt = _eval(expr_true, kind, Xin)
     yp = _eval(expr_pred, kind, Xin)
     den = yt.std() if yt.std() > 1e-12 else np.sqrt(np.mean(yt**2)) + 1e-12
+    if den <= 1e-12 and ref_scale:  # true function ≡ 0: relative to the couplings' scale (D-041)
+        den = ref_scale
     v = float(np.sqrt(np.mean((yp - yt) ** 2)) / den)
     return v if np.isfinite(v) else float("inf")
 
 
 def parametric_match(
-    expr_pred, expr_true, kind: str, Xin: np.ndarray, tol_coef=0.05, tol_resid=1e-3, slack=2
+    expr_pred,
+    expr_true,
+    kind: str,
+    Xin: np.ndarray,
+    tol_coef=0.05,
+    tol_resid=1e-3,
+    slack=2,
+    ref_scale: float | None = None,
+    free_constant: bool = False,
 ) -> dict:
+    """``ref_scale``: magnitude used when the true function is 0 (std of the true couplings; D-041).
+    ``free_constant``: the function's constant term is not identifiable (f with per-node constants c_i: only
+    f(0) + mean(c) is), so a constant offset is removed from the prediction before comparing (D-041)."""
     expr_pred, expr_true = sp.sympify(expr_pred), sp.sympify(expr_true)
     yp = _eval(expr_pred, kind, Xin)
+    if free_constant:
+        yt0 = _eval(expr_true, kind, Xin)
+        off = float(np.mean(yp) - np.mean(yt0))
+        yp = yp - off
+        expr_pred = sp.simplify(expr_pred - off)
     templ, syms, th_true = parametrize({kind: expr_true})
     t = templ[kind]
     out = {"complexity_pred": complexity(expr_pred), "complexity_true": complexity(expr_true)}
     if expr_true == 0:
-        resid = float(np.sqrt(np.mean(yp**2)))
+        # relative to the magnitude of the true dynamics (the couplings), not to 0 (D-041)
+        resid = float(np.sqrt(np.mean(yp**2))) / (ref_scale if ref_scale else 1.0)
         out.update(
-            exact=bool(resid < 1e-6 or expr_pred == 0),
+            exact=bool(resid <= tol_resid or expr_pred == 0),
             coef_rel_err=[],
             max_coef_rel_err=0.0,
             resid=resid,
@@ -86,8 +108,20 @@ def parametric_match(
     return out
 
 
-def equation_report(pred: dict, truth: dict, inputs: dict[str, np.ndarray]) -> dict:
-    """pred/truth: {"f","g","h"} sympy; inputs: per-kind held-out input arrays."""
+def equation_report(
+    pred: dict, truth: dict, inputs: dict[str, np.ndarray], node_constants: bool = False
+) -> dict:
+    """pred/truth: {"f","g","h"} sympy; inputs: per-kind held-out input arrays.
+
+    ``node_constants``: the system has per-node constants c_i, so f is compared up to a constant (D-041).
+    A true function that is identically 0 is judged against the scale of the non-zero true functions.
+    """
+    scales = [
+        float(_eval(truth[k], k, inputs[k]).std())
+        for k in ("f", "g", "h")
+        if k in truth and k in inputs and sp.sympify(truth[k]) != 0
+    ]
+    ref = max(scales) if scales else None
     rep = {}
     for kind in ("f", "g", "h"):
         if kind not in truth or kind not in inputs:
@@ -96,8 +130,11 @@ def equation_report(pred: dict, truth: dict, inputs: dict[str, np.ndarray]) -> d
         rep[kind] = {
             "pred": str(p),
             "true": str(truth[kind]),
-            "nrmse": functional_nrmse(p, truth[kind], kind, inputs[kind]),
-            **parametric_match(p, truth[kind], kind, inputs[kind]),
+            "nrmse": functional_nrmse(p, truth[kind], kind, inputs[kind], ref),
+            **parametric_match(
+                p, truth[kind], kind, inputs[kind], ref_scale=ref,
+                free_constant=node_constants and kind == "f",
+            ),
         }
     rep["all_exact"] = bool(all(rep[k]["exact"] for k in rep))
     return rep
